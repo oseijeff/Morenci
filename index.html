@@ -548,6 +548,48 @@ mark{background:var(--warn-soft);color:inherit;padding:0 2px;border-radius:3px}
         </div>
       </div>
     </section>
+    <!-- MAINTAIN -->
+    <section class="page" id="p-maintain" aria-labelledby="h-maintain">
+      <div class="page-head">
+        <h1 id="h-maintain">Maintenance</h1>
+        <p>A maintenance program built for each well from its equipment and water chemistry, with a record of what was done and what is due. Record one completion per task to start its clock.</p>
+      </div>
+      <div class="panel stack">
+        <div class="fields">
+          <label class="f">Well<select id="mt_well"></select></label>
+          <label class="f">Task<select id="mt_task"></select></label>
+          <label class="f">Date done<input type="date" id="mt_date"></label>
+          <label class="f">Engine or run hours <span class="unit">optional</span><input type="number" id="mt_hours"></label>
+          <label class="f">Parts used <span class="unit">optional</span><input id="mt_parts" maxlength="300"></label>
+          <label class="f">Cost <span class="unit">$, optional</span><input type="number" id="mt_cost"></label>
+        </div>
+        <label class="f">Notes<textarea id="mt_notes" maxlength="500" placeholder="Findings, readings, who did the work"></textarea></label>
+        <div class="row">
+          <button class="btn" id="mt_add">Record maintenance</button>
+          <button class="btn ghost" id="mt_dl">Download program</button>
+          <button class="btn ghost" id="mt_addrep">Add to project report</button>
+          <button class="btn ghost" id="mt_csv">Download history CSV</button>
+          <button class="btn ghost" id="mt_all">Add due list (all wells)</button>
+          <span class="src" id="mt_msg" role="status"></span>
+        </div>
+      </div>
+      <div id="mt_out" style="margin-top:18px"></div>
+    </section>
+
+    <!-- EQUIPMENT -->
+    <section class="page" id="p-equip" aria-labelledby="h-equip">
+      <div class="page-head">
+        <h1 id="h-equip">Equipment and parts</h1>
+        <p>What is installed on each well, how to service it, the parts and consumables to hold, and specifications to issue when buying replacements. Equipment data comes from the 1997 Upper Eagle Creek O&amp;M manual; service intervals combine that manual with the Resilient Well Manual.</p>
+      </div>
+      <div class="subtabs" role="tablist" id="eqTabs"></div>
+      <div class="row" style="margin-bottom:12px">
+        <button class="btn ghost" id="eq_dlall">Download equipment guide</button>
+        <button class="btn ghost" id="eq_addall">Add to project report</button>
+      </div>
+      <div class="panel" id="eq_body"></div>
+    </section>
+
     <!-- REPORTS -->
     <section class="page" id="p-reports" aria-labelledby="h-reports">
       <div class="page-head">
@@ -711,13 +753,15 @@ const ICONS = {
   checks:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 9 2 2 4-4M8 16h8"/></svg>',
   log:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M5 16l4-5 4 3 6-8"/></svg>',
   trouble:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6"/><path d="m20 20-4.5-4.5"/></svg>',
+  maintain:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4l-2.5 2.5"/></svg>',
+  equip:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>',
   explore:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2v6M9 8h6l-1 5h-4zM11 13h2v9h-2z"/><path d="M4 22h16"/></svg>',
   reports:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h9l5 5v15H6z"/><path d="M14 2v6h6M9 13h8M9 17h8"/></svg>',
   search:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h7a3 3 0 0 1 3 3v13a2 2 0 0 0-2-2H4zM20 4h-3a3 3 0 0 0-3 3"/><path d="M20 4v14h-6"/></svg>',
   data:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/></svg>',
   ask:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H9l-5 4z"/></svg>'
 };
-const PAGES = [["explore","Explore"],["tools","Calculators"],["wells","Wells"],["checks","Checklists"],["log","Log"],["reports","Reports"],["trouble","Fixes"],["search","Manual"],["data","Data"]];
+const PAGES = [["explore","Explore"],["tools","Calculators"],["wells","Wells"],["maintain","Maintain"],["equip","Equipment"],["checks","Checklists"],["log","Log"],["reports","Reports"],["trouble","Fixes"],["search","Manual"],["data","Data"]];
 function buildNav(){
   const h = PAGES.map(([id,l])=>`<button data-page="${id}">${ICONS[id]}<span>${l}</span></button>`).join("");
   $("nav").innerHTML = h; $("tabbar").innerHTML = h;
@@ -726,7 +770,7 @@ function buildNav(){
 function go(id){
   document.querySelectorAll(".page").forEach(p=>p.classList.toggle("active", p.id==="p-"+id));
   document.querySelectorAll("[data-page]").forEach(b=>b.setAttribute("aria-current", b.dataset.page===id ? "page" : "false"));
-  store.set("wt_page", id); if (id==="data") renderStats(); if (id==="reports") renderReports();
+  store.set("wt_page", id); if (id==="data") renderStats(); if (id==="reports") renderReports(); if (id==="maintain") renderMaintain();
   window.scrollTo({top:0});
 }
 document.querySelectorAll("[data-theme-toggle]").forEach(b=>b.addEventListener("click",()=>{
@@ -1036,13 +1080,14 @@ function refreshWellLists(){
   const opts = ws.map(w => `<option value="${esc(w.id)}">${esc(w.id)}</option>`).join("");
   const keep = (id, html) => { const v = $(id).value; $(id).innerHTML = html; if ([...$(id).options].some(o => o.value === v)) $(id).value = v; };
   keep("lg_well", opts);
+  keep("mt_well", opts);
   keep("ck_well", `<option value="">General / no well</option>` + opts);
   keep("lg_filter", `<option value="">All wells</option>` + opts);
   keep("c_pick", `<option value="">Enter my own values</option>` + ws.filter(hasChem).map(w => `<option value="${esc(w.id)}">${esc(w.id)}${w.type && w.type !== "—" ? " (" + esc(w.type) + ")" : ""}</option>`).join(""));
   keep("e_pick", `<option value="">Enter my own duty</option>` + ws.filter(w => isNum(w.q) && isNum(w.tdh)).map(w => `<option value="${esc(w.id)}">${esc(w.id)}: ${fmt(w.q)} gpm at ${fmt(w.tdh)} ft</option>`).join(""));
   const b = BASES[$("lg_well").value]; $("lg_base").value = b ?? "";
 }
-function wellsChanged(){ localSave(); renderWells(); refreshWellLists(); renderLogs(); }
+function wellsChanged(){ localSave(); renderWells(); refreshWellLists(); renderLogs(); if ($("mt_out")) renderMaintain(); }
 
 /* detail window */
 function openWell(id){
@@ -1066,11 +1111,12 @@ function openWell(id){
   h += `<h3>Latest readings</h3>`;
   const logs = LOGS.filter(r => r.well === id).slice(0, 5);
   h += logs.length ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th class="num">Sc</th><th>Status</th></tr></thead><tbody>${logs.map(r => { const s = rowStatus(r); return `<tr><td>${esc(r.date)}</td><td class="num">${fmt(r.sc, 1)}</td><td><span class="pill ${s[0]}">${s[1]}</span></td></tr>`; }).join("")}</tbody></table></div>` : `<div class="src">No readings logged yet.</div>`;
-  h += `<div class="row"><button class="btn" id="wd_report">Design report</button><button class="btn ghost" id="wd_edit">Edit well</button><button class="btn ghost" id="wd_calc">Open in calculators</button><button class="btn ghost" id="wd_log">Log a reading</button></div>`;
+  h += `<div class="row"><button class="btn" id="wd_report">Design report</button><button class="btn ghost" id="wd_edit">Edit well</button><button class="btn ghost" id="wd_calc">Open in calculators</button><button class="btn ghost" id="wd_maint">Maintenance</button><button class="btn ghost" id="wd_log">Log a reading</button></div>`;
   $("wd_body").innerHTML = h;
   $("wd_report").onclick = () => { $("wellDlg").close(); openReport(id); };
   $("wd_edit").onclick = () => { $("wellDlg").close(); openEditor(id); };
   $("wd_calc").onclick = () => { $("wellDlg").close(); loadIntoCalculators(w); };
+  $("wd_maint").onclick = () => { $("wellDlg").close(); go("maintain"); $("mt_well").value = id; renderMaintain(); };
   $("wd_log").onclick = () => { $("wellDlg").close(); go("log"); $("lg_well").value = id; $("lg_well").dispatchEvent(new Event("change")); $("lg_q").focus(); };
   $("wellDlg").showModal();
 }
@@ -1337,7 +1383,7 @@ function rowStatus(r){
   return healthStatus((r.sc/b-1)*100);
 }
 function localSave(){
-  const ok = [store.set("wt_custom_wells",CUSTOM), store.set("wt_well_edits",EDITS), store.set("wt_logs",LOGS), store.set("wt_bases",BASES), store.set("wt_base_at",BASE_AT), store.set("wt_jobs",JOBS)].every(Boolean);
+  const ok = [store.set("wt_maint",MAINT), store.set("wt_custom_wells",CUSTOM), store.set("wt_well_edits",EDITS), store.set("wt_logs",LOGS), store.set("wt_bases",BASES), store.set("wt_base_at",BASE_AT), store.set("wt_jobs",JOBS)].every(Boolean);
   if (!ok){ ["lg_banner","ck_banner"].forEach(i=>{ $(i).hidden=false; $(i).textContent="This browser couldn't save the last change (storage full or blocked). Download a backup from the Data page, then clear old entries."; }); }
   renderStats();
 }
@@ -1500,7 +1546,7 @@ function saveFile(filename, text, type){
 }
 function startLocal(){
   LOCAL = true;
-  LOGS = store.get("wt_logs", []); BASES = store.get("wt_bases", {}); BASE_AT = store.get("wt_base_at", {}); JOBS = store.get("wt_jobs", []); CUSTOM = store.get("wt_custom_wells", []); EDITS = store.get("wt_well_edits", {});
+  LOGS = store.get("wt_logs", []); BASES = store.get("wt_bases", {}); BASE_AT = store.get("wt_base_at", {}); JOBS = store.get("wt_jobs", []); CUSTOM = store.get("wt_custom_wells", []); EDITS = store.get("wt_well_edits", {}); MAINT = store.get("wt_maint", []);
   LOGS.sort((a, b) => a.date < b.date ? 1 : -1);
   ["lg_banner", "ck_banner"].forEach(i => $(i).hidden = true);
   updateWho(); renderWells(); refreshWellLists(); renderLogs(); renderJobs(); renderStats();
@@ -1513,11 +1559,12 @@ function renderStats(){
   if (!$("dt_stats")) return;
   const wells = new Set(LOGS.map(r => r.well)).size;
   let bytes = 0;
-  try { ["wt_logs", "wt_bases", "wt_jobs", "wt_custom_wells", "wt_well_edits"].forEach(k => bytes += (localStorage.getItem(k) || "").length); } catch (e) {}
+  try { ["wt_logs", "wt_bases", "wt_jobs", "wt_custom_wells", "wt_well_edits", "wt_maint"].forEach(k => bytes += (localStorage.getItem(k) || "").length); } catch (e) {}
   results($("dt_stats"), [
     ["Readings", fmt(LOGS.length), ""], ["Wells with readings", fmt(wells), ""],
     ["Baselines", fmt(Object.keys(BASES).length), ""], ["Jobs", fmt(JOBS.length), ""],
     ["Custom wells", fmt(CUSTOM.length), ""], ["Edited wells", fmt(Object.keys(EDITS).length), ""],
+    ["Maintenance records", fmt(MAINT.length), ""],
     ["Space used", fmt(bytes / 1024, 0), "KB of ~5,000"]
   ]);
 }
@@ -1530,9 +1577,9 @@ function setupData(){
   });
   $("dt_export").addEventListener("click", () => {
     const payload = {app: "morenci-well-toolkit", version: 1, exported: new Date().toISOString(), exportedBy: MYNAME(),
-      logs: LOGS, baselines: BASES, baselineDates: BASE_AT, jobs: JOBS, customWells: CUSTOM, wellEdits: EDITS};
+      logs: LOGS, baselines: BASES, baselineDates: BASE_AT, jobs: JOBS, customWells: CUSTOM, wellEdits: EDITS, maintenance: MAINT};
     saveFile(`well_toolkit_backup_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 1), "application/json");
-    $("dt_msg").textContent = `Backup downloaded: ${LOGS.length} readings, ${Object.keys(BASES).length} baselines, ${JOBS.length} jobs, ${CUSTOM.length} custom wells, ${Object.keys(EDITS).length} edited wells.`;
+    $("dt_msg").textContent = `Backup downloaded: ${LOGS.length} readings, ${Object.keys(BASES).length} baselines, ${JOBS.length} jobs, ${CUSTOM.length} custom wells, ${Object.keys(EDITS).length} edited wells, ${MAINT.length} maintenance records.`;
   });
   $("dt_import").addEventListener("change", async e => {
     const file = e.target.files[0]; e.target.value = "";
@@ -1542,17 +1589,22 @@ function setupData(){
     if (!data || data.app !== "morenci-well-toolkit"){ $("dt_msg").textContent = "That file isn't a Morenci Well Field Toolkit backup."; return; }
     const r = mergeBackup(data);
     wellsChanged(); renderJobs();
-    $("dt_msg").textContent = `Imported: ${r.logs} new readings, ${r.bases} baselines added or updated, ${r.jobs} new jobs, ${r.jobsMerged} jobs merged, ${r.wells} wells added or updated.`;
+    $("dt_msg").textContent = `Imported: ${r.logs} new readings, ${r.bases} baselines added or updated, ${r.jobs} new jobs, ${r.jobsMerged} jobs merged, ${r.wells} wells added or updated, ${r.maint} maintenance records.`;
   });
   $("dt_clear").addEventListener("click", () => {
-    if (!confirm("Delete every reading, baseline, job, custom well and well edit stored in this browser? This can't be undone.")) return;
-    LOGS = []; BASES = {}; BASE_AT = {}; JOBS = []; CUSTOM = []; EDITS = {}; CURRENT_JOB = null;
-    wellsChanged(); renderJobs();
+    if (!confirm("Delete every reading, baseline, job, custom well, well edit and maintenance record stored in this browser? This can't be undone.")) return;
+    LOGS = []; BASES = {}; BASE_AT = {}; JOBS = []; CUSTOM = []; EDITS = {}; MAINT = []; CURRENT_JOB = null;
+    wellsChanged(); renderJobs(); renderMaintain();
     $("dt_msg").textContent = "All data cleared from this browser.";
   });
 }
 function mergeBackup(d){
-  const res = {logs: 0, bases: 0, jobs: 0, jobsMerged: 0, wells: 0};
+  const res = {logs: 0, bases: 0, jobs: 0, jobsMerged: 0, wells: 0, maint: 0};
+  const haveM = new Set(MAINT.map(m => m.id));
+  (Array.isArray(d.maintenance) ? d.maintenance : []).forEach(m => {
+    if (!m || !m.id || haveM.has(m.id) || typeof m.well !== "string") return;
+    MAINT.push(m); haveM.add(m.id); res.maint++;
+  });
   (Array.isArray(d.customWells) ? d.customWells : []).forEach(c => {
     if (!c || typeof c.id !== "string" || !/^[A-Za-z0-9 ._\-#()]{1,30}$/.test(c.id)) return;
     if (BASE_WELLS.some(b => b.id === c.id)) return;
@@ -2463,6 +2515,459 @@ function setupReports(){
   renderReports();
 }
 
+/* ---------------- maintenance ---------------- */
+let MAINT = [];
+const MAINT_TASKS = [
+  // id, title, group, interval (days), hours interval, applies, detail, parts/consumables, manual ref
+  {id: "sc", t: "Specific capacity check at a fixed rate", g: "Well", d: 30, when: "well", detail: "Run at the usual rate, record static and pumping level, and log the reading. Investigate at 10% below baseline, rehabilitate at 25%.", parts: "\u2014", ref: "Manual 8.1"},
+  {id: "sound", t: "Manual water-level sounding to check the transducer", g: "Well", d: 30, when: "well", detail: "Sound the well and compare with the transducer reading; recalibrate if they differ by more than 1 ft.", parts: "Sounder tape or probe", ref: "Manual 8.2"},
+  {id: "visual", t: "Wellhead and site walk-round", g: "Well", d: 7, when: "well", detail: "Leaks, seal and vent condition, security, erosion around the pedestal, signs of cascading water.", parts: "\u2014", ref: "Manual 8.2"},
+  {id: "sand", t: "Sand and turbidity test", g: "Well", d: 90, when: "well", detail: "Rossum sand tester at the normal rate 15 minutes after start-up. Watch at 5 mg/L, act at 15 mg/L.", parts: "Rossum tester, sample bottles", ref: "Manual 8.1"},
+  {id: "fieldwq", t: "Field water quality (pH, EC, temperature, DO, turbidity)", g: "Well", d: 90, when: "well", detail: "Flow-through cell at a stable rate; record with the log reading.", parts: "Calibration standards", ref: "Manual 3.4"},
+  {id: "vib", t: "Vibration route on motor and discharge head", g: "Pump", d: 90, when: "well", detail: "Velocity RMS at both bearings, horizontal, vertical and axial. Compare with the start-up baseline; act at the ANSI/HI 9.6.4 alarm limit or double the baseline.", parts: "\u2014", ref: "Manual 8.1"},
+  {id: "airvalve", t: "Exercise air and check valves", g: "Wellhead", d: 90, when: "well", detail: "Cycle the combination air valve, check the seat and float, and confirm the check valve closes without slam.", parts: "Air valve rebuild kit", ref: "Manual 7.4"},
+  {id: "fullwq", t: "Full water quality suite and PHREEQC run", g: "Well", d: 365, when: "well", detail: "Major ions, metals, bacteria; recompute saturation indices and the Larson-Skold index, then review materials and scaling risk.", parts: "Lab bottles, preservatives", ref: "Manual 3.4, 8.1"},
+  {id: "meterver", t: "Verify the flow meter", g: "Meter", d: 365, when: "meter", detail: "Compare against a reference (portable ultrasonic or drawdown test). Propeller meters must stay within the AWWA C704 accuracy band of about \u00b12%.", parts: "Meter service kit", ref: "Manual 7.4"},
+  {id: "thermo", t: "Thermographic scan of switchgear and starters", g: "Power", d: 365, when: "electric", detail: "Infrared scan under load; look for hot joints and unbalanced phases.", parts: "\u2014", ref: "Manual 8.2"},
+  {id: "genload", t: "Standby generator load test (2 h at 75%)", g: "Power", d: 365, when: "electric", detail: "Run on load, check fuel quality and transfer switch operation.", parts: "Fuel filter, oil", ref: "Manual 7.3"},
+  {id: "pull", t: "Pull the pump: inspect bowls, bearings and column", g: "Pump", d: 1460, when: "well", detail: "Measure bowl and lineshaft bearing clearances against the allowable table, check wear rings, shaft straightness and column threads; run a downhole video and caliper while the well is open.", parts: "Bearing set, O-ring kit, wear rings, shaft couplings", ref: "Manual 8.2, Equipment tab"},
+  {id: "step", t: "Step-drawdown test to recompute well efficiency", g: "Well", d: 3650, when: "well", detail: "Four steps from 50% to 125% of the design rate; a rising well-loss coefficient means the screen or pack is clogging.", parts: "\u2014", ref: "Manual 6.2"},
+  {id: "rehab", t: "Chemical rehabilitation (scale or biofouling)", g: "Well", d: 1095, when: "scaling", detail: "Confirm the deposit first, then treat: inhibited acid for carbonate scale; oxidant and surfactant before acid for biofouling; mechanical removal plus chelant for gypsum. Neutralize and pump to lined containment.", parts: "Inhibited sulfamic or hydrochloric acid, surfactant, neutralizer, swabbing tool", ref: "Manual 8.4"},
+  {id: "casingvid", t: "Casing and screen video for corrosion", g: "Well", d: 365, when: "corrosive", detail: "Extra inspection where water is very corrosive: look for wall loss, perforations and sand entry.", parts: "\u2014", ref: "Manual 8.4"},
+  // engine train
+  {id: "engdaily", t: "Engine walk-round: oil, coolant, fuel, leaks, belts", g: "Engine", d: 1, h: 10, when: "engine", detail: "Check levels before each start; record engine hours; drain water from the fuel/water separator.", parts: "\u2014", ref: "Cat OMM"},
+  {id: "engoil", t: "Engine oil and filter change", g: "Engine", d: 180, h: 250, when: "engine", detail: "Change oil and filters at the hour interval in the engine manual (typically 250 h for this class), or every 6 months.", parts: "Engine oil (SAE 15W-40 CH-4 or later), oil filter, bypass filter", ref: "Cat OMM"},
+  {id: "engfuel", t: "Fuel and air filters, water separator", g: "Engine", d: 365, h: 500, when: "engine", detail: "Replace primary and secondary fuel filters and the air cleaner element; clean the precleaner.", parts: "Fuel filters, air filter element", ref: "Cat OMM"},
+  {id: "engcool", t: "Coolant test and conditioner", g: "Engine", d: 365, h: 1000, when: "engine", detail: "Test coolant for freeze point and supplemental coolant additive; top up or change per the test.", parts: "Coolant, SCA, test strips", ref: "Cat OMM"},
+  {id: "englash", t: "Valve lash and injector check", g: "Engine", d: 730, h: 2000, when: "engine", detail: "Adjust valve lash and inspect injectors and turbocharger; record blow-by and exhaust temperatures.", parts: "Gasket set, injector seals", ref: "Cat OMM"},
+  {id: "engover", t: "Major service or overhaul assessment", g: "Engine", d: 3650, h: 10000, when: "engine", detail: "Oil analysis trend, compression and blow-by results decide top-end or full overhaul.", parts: "Overhaul kit", ref: "Cat OMM"},
+  {id: "gearoil", t: "Right-angle gear drive oil change", g: "Gear drive", d: 365, h: 2500, when: "gear", detail: "First change after about 500 h, then yearly or at the hour interval. Check the breather, seals and the non-reverse ratchet at the same time.", parts: "Gear oil (typically AGMA 5EP / ISO 220 \u2014 confirm with the Amarillo manual), seal kit, breather", ref: "Amarillo manual"},
+  {id: "gearalign", t: "Check drive shaft alignment and guards", g: "Gear drive", d: 365, when: "gear", detail: "Check the drive shaft, yokes and slip joint for wear and correct alignment; grease the slip joint; confirm all guards are in place.", parts: "Grease, U-joint kit, bearing plate kit", ref: "1997 manual, Section 13"},
+  {id: "lineoil", t: "Lineshaft oil reservoir and drip rate", g: "Pump", d: 7, when: "oil-lube", detail: "Check the reservoir weekly and keep the drip feeding before and during running (typically 5\u201310 drops per minute, plus about 1 drop per minute per 100 ft of setting \u2014 confirm with the pump manual).", parts: "ISO 32 turbine oil with rust and oxidation inhibitors (NSF H1 grade where the well serves drinking water)", ref: "1997 manual, Section 11"},
+  {id: "hxclean", t: "Heat exchanger inspection and cleaning", g: "Heat exchanger", d: 365, when: "hx", detail: "Inspect and clean the tube bundle; in scaling water, acid-clean and check for pitting. Confirm the engine reaches its normal temperature under load.", parts: "Gasket set, zinc anodes, cleaning acid", ref: "1997 manual, Section 14"},
+  {id: "hxanode", t: "Check sacrificial anodes on the heat exchanger", g: "Heat exchanger", d: 180, when: "hx", detail: "Replace anodes when half consumed.", parts: "Zinc anodes", ref: "1997 manual, Section 14"},
+  {id: "metersvc", t: "Flow meter propeller and bearing service", g: "Meter", d: 730, when: "meter", detail: "Remove the meterhead, inspect the propeller, shaft, bearings and drive cable; replace worn bearings and O-rings; check the over-run bearing on wells that coast down.", parts: "Propeller bearing kit, O-rings, drive cable, register", ref: "1997 manual, Section 15"},
+  {id: "vfdservice", t: "VFD and motor service", g: "Power", d: 365, when: "electric", detail: "Clean filters and fans, check torque on terminals, test winding insulation and bearing temperature sensors, review fault log.", parts: "VFD filters, fans, motor grease", ref: "Manual 7.3"}
+];
+const MT = id => MAINT_TASKS.find(t => t.id === id);
+function wellTraits(w){
+  const chem = hasChem(w) ? computeChem(w) : null;
+  const engine = /cat|diesel|engine/i.test(w.engine || "") && !/motor/i.test(w.engine || "");
+  return {
+    well: true,
+    engine,
+    electric: !engine,
+    gear: !!w.gear,
+    hx: w.area === "Upper Eagle Creek" || !!w.hx,
+    meter: true,
+    "oil-lube": w.area === "Upper Eagle Creek",
+    scaling: isNum(w.si) ? w.si > 0.3 : (chem ? true : false),
+    corrosive: chem ? (chem.cls === "Very high") : false
+  };
+}
+function tasksFor(w){
+  const tr = wellTraits(w);
+  return MAINT_TASKS.filter(t => tr[t.when]);
+}
+const INTERVAL_LABEL = d => d <= 1 ? "Daily" : d <= 7 ? "Weekly" : d <= 31 ? "Monthly" : d <= 92 ? "Quarterly" : d <= 190 ? "Every 6 months" : d <= 400 ? "Yearly" : d <= 1200 ? "Every 3 years" : d <= 1600 ? "Every 4\u20135 years" : "Every 10 years";
+function lastDone(wellId, taskId){
+  return MAINT.filter(m => m.well === wellId && m.task === taskId).sort((a, b) => a.date < b.date ? 1 : -1)[0] || null;
+}
+function dueStatus(w, t){
+  const last = lastDone(w.id, t.id);
+  if (!last) return {cls: "n", label: "Not recorded", last: null, due: null};
+  const due = new Date(new Date(last.date).getTime() + t.d * 86400000);
+  const days = Math.round((due - new Date()) / 86400000);
+  const cls = days < 0 ? "bad" : days <= Math.max(3, t.d * 0.15) ? "warn" : "ok";
+  const label = days < 0 ? `Overdue by ${fmt(-days)} d` : `Due in ${fmt(days)} d`;
+  return {cls, label, last, due: due.toISOString().slice(0, 10), days};
+}
+function renderMaintain(){
+  const id = $("mt_well").value, w = getWell(id);
+  if (!w){ $("mt_out").innerHTML = `<div class="empty">Choose a well.</div>`; return; }
+  const tr = wellTraits(w), tasks = tasksFor(w);
+  const rows = tasks.map(t => {
+    const s = dueStatus(w, t);
+    return {t, s};
+  }).sort((a, b) => (a.s.days ?? 1e6) - (b.s.days ?? 1e6));
+  const overdue = rows.filter(r => r.s.cls === "bad").length, soon = rows.filter(r => r.s.cls === "warn").length, none = rows.filter(r => r.s.cls === "n").length;
+  let h = `<div class="results" style="margin-bottom:14px">
+    <div class="res"><div class="k">Tasks in this program</div><div class="v">${rows.length}</div></div>
+    <div class="res"><div class="k">Overdue</div><div class="v" style="color:var(--bad)">${overdue}</div></div>
+    <div class="res"><div class="k">Due soon</div><div class="v" style="color:var(--warn)">${soon}</div></div>
+    <div class="res"><div class="k">Never recorded</div><div class="v">${none}</div></div></div>`;
+  h += `<p class="src">Program built for ${esc(w.id)}: ${esc([tr.engine ? "diesel engine train" : "electric drive", tr.gear ? "right-angle gear drive" : "", tr["oil-lube"] ? "oil-lubricated lineshaft" : "", tr.hx ? "heat exchanger" : "", tr.scaling ? "scaling water" : "", tr.corrosive ? "very corrosive water" : ""].filter(Boolean).join(" \u00b7 "))}</p>`;
+  h += `<div class="tbl-wrap"><table><thead><tr><th>Task</th><th>Group</th><th>Interval</th><th>Last done</th><th>Next due</th><th>Status</th><th></th></tr></thead><tbody>${rows.map(({t, s}) => `<tr>
+    <td><strong>${esc(t.t)}</strong><br><span class="src">${esc(t.detail)}</span><br><span class="src">Parts: ${esc(t.parts)} \u00b7 ${esc(t.ref)}</span></td>
+    <td>${esc(t.g)}</td><td>${esc(INTERVAL_LABEL(t.d))}${t.h ? `<br><span class="src">or ${fmt(t.h)} h</span>` : ""}</td>
+    <td>${s.last ? esc(s.last.date) + (s.last.by ? `<br><span class="src">${esc(s.last.by)}</span>` : "") : "\u2014"}</td>
+    <td>${s.due ? esc(s.due) : "\u2014"}</td>
+    <td><span class="pill ${s.cls}">${esc(s.label)}</span></td>
+    <td><button class="btn ghost" style="padding:4px 8px" data-done="${t.id}">Record</button></td></tr>`).join("")}</tbody></table></div>`;
+  const hist = MAINT.filter(m => m.well === id).sort((a, b) => a.date < b.date ? 1 : -1);
+  h += `<h3 style="margin-top:18px">History (${hist.length})</h3>`;
+  h += hist.length ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Task</th><th class="num">Engine h</th><th>Parts used</th><th class="num">Cost</th><th>Notes</th><th>By</th><th></th></tr></thead><tbody>${hist.map(m => `<tr><td>${esc(m.date)}</td><td>${esc((MT(m.task) || {t: m.task}).t)}</td><td class="num">${fmt(m.hours)}</td><td>${esc(m.parts)}</td><td class="num">${isNum(m.cost) ? "$" + fmt(m.cost) : ""}</td><td>${esc(m.notes)}</td><td>${esc(m.by)}</td><td><button class="btn ghost" style="padding:4px 8px" data-mdel="${esc(m.id)}">Delete</button></td></tr>`).join("")}</tbody></table></div>` : `<div class="src">Nothing recorded yet for this well.</div>`;
+  $("mt_out").innerHTML = h;
+  $("mt_out").querySelectorAll("[data-done]").forEach(b => b.onclick = () => { $("mt_task").value = b.dataset.done; $("mt_date").focus(); window.scrollTo({top: 0, behavior: "smooth"}); });
+  $("mt_out").querySelectorAll("[data-mdel]").forEach(b => b.onclick = () => { if (!confirm("Delete this maintenance record?")) return; MAINT = MAINT.filter(x => x.id !== b.dataset.mdel); localSave(); renderMaintain(); });
+  const opts = tasks.map(t => `<option value="${t.id}">${esc(t.t)}</option>`).join("");
+  const cur = $("mt_task").value;
+  $("mt_task").innerHTML = opts;
+  if (tasks.some(t => t.id === cur)) $("mt_task").value = cur;
+}
+function addMaint(){
+  const id = $("mt_well").value, task = $("mt_task").value, date = $("mt_date").value;
+  if (!id || !task || !date){ $("mt_msg").textContent = "Choose a well and task, and set the date."; return; }
+  MAINT.push({id: newId("m"), well: id, task, date, hours: num("mt_hours"), parts: $("mt_parts").value.trim().slice(0, 300), cost: num("mt_cost"), notes: $("mt_notes").value.trim().slice(0, 500), by: MYNAME()});
+  ["mt_hours", "mt_parts", "mt_cost", "mt_notes"].forEach(i => $(i).value = "");
+  localSave(); renderMaintain();
+  const t = MT(task);
+  $("mt_msg").textContent = `Recorded. Next due about ${new Date(new Date(date).getTime() + t.d * 86400000).toISOString().slice(0, 10)}.`;
+}
+function maintPlanHtml(){
+  const w = getWell($("mt_well").value); if (!w) return null;
+  const tr = wellTraits(w), tasks = tasksFor(w);
+  const groups = [...new Set(tasks.map(t => t.g))];
+  let h = `<div class="rep"><p>Maintenance program for <strong>${esc(w.id)}</strong> (${esc(w.area || "")}). Equipment: ${esc([tr.engine ? "diesel engine" : "electric motor and VFD", tr.gear ? "right-angle gear drive" : "", tr["oil-lube"] ? "oil-lubricated lineshaft" : "", tr.hx ? "heat exchanger" : "", "flow meter"].filter(Boolean).join(", "))}.</p>`;
+  groups.forEach(g => {
+    h += `<h3>${esc(g)}</h3><div class="tbl-wrap"><table><thead><tr><th>Task</th><th>Interval</th><th>What to do</th><th>Parts and consumables</th><th>Last done</th></tr></thead><tbody>${tasks.filter(t => t.g === g).map(t => { const s = dueStatus(w, t); return `<tr><td><strong>${esc(t.t)}</strong></td><td>${esc(INTERVAL_LABEL(t.d))}${t.h ? ` or ${fmt(t.h)} h` : ""}</td><td>${esc(t.detail)}<br><span class="src">${esc(t.ref)}</span></td><td>${esc(t.parts)}</td><td>${s.last ? esc(s.last.date) + " \u2014 " + esc(s.label) : "not recorded"}</td></tr>`; }).join("")}</tbody></table></div>`;
+  });
+  const hist = MAINT.filter(m => m.well === w.id).sort((a, b) => a.date < b.date ? 1 : -1);
+  if (hist.length) h += `<h3>Maintenance history</h3><div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Task</th><th class="num">Engine h</th><th>Parts</th><th class="num">Cost</th><th>Notes</th><th>By</th></tr></thead><tbody>${hist.map(m => `<tr><td>${esc(m.date)}</td><td>${esc((MT(m.task) || {t: m.task}).t)}</td><td class="num">${fmt(m.hours)}</td><td>${esc(m.parts)}</td><td class="num">${isNum(m.cost) ? "$" + fmt(m.cost) : ""}</td><td>${esc(m.notes)}</td><td>${esc(m.by)}</td></tr>`).join("")}</tbody></table></div>`;
+  h += `<p class="src">Intervals are the manual's schedule (Section 8.2) with typical manufacturer intervals for the engine, gear drive, heat exchanger and meter. Always follow the equipment manual for the serial number installed.</p></div>`;
+  return {title: `Maintenance program: ${w.id}`, html: h};
+}
+function maintCsv(){
+  const rows = MAINT.slice().sort((a, b) => a.date < b.date ? 1 : -1);
+  const q = v => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [["date", "well", "task", "engine_hours", "parts", "cost", "notes", "by"].join(",")].concat(rows.map(m => [m.date, m.well, (MT(m.task) || {t: m.task}).t, m.hours, m.parts, m.cost, m.notes, m.by].map(q).join(","))).join("\n");
+  saveFile(`maintenance_log_${new Date().toISOString().slice(0, 10)}.csv`, csv, "text/csv");
+}
+function setupMaintain(){
+  $("mt_date").value = new Date().toISOString().slice(0, 10);
+  $("mt_well").addEventListener("change", renderMaintain);
+  $("mt_add").addEventListener("click", addMaint);
+  $("mt_dl").addEventListener("click", () => { const r = maintPlanHtml(); if (r) saveFile(`${fileSafe(r.title)}.html`, docWrap(r.title, r.html, {kind: "Maintenance program"}), "text/html"); });
+  $("mt_addrep").addEventListener("click", () => { const r = maintPlanHtml(); if (r) addReportItem(r.title, "Maintenance program", r.html); });
+  $("mt_csv").addEventListener("click", maintCsv);
+  $("mt_all").addEventListener("click", () => {
+    const wells = WELLS();
+    const rows = [];
+    wells.forEach(w => tasksFor(w).forEach(t => { const s = dueStatus(w, t); if (s.cls === "bad" || s.cls === "warn") rows.push({w, t, s}); }));
+    rows.sort((a, b) => (a.s.days ?? 0) - (b.s.days ?? 0));
+    const h = rows.length ? `<div class="rep"><div class="tbl-wrap"><table><thead><tr><th>Well</th><th>Task</th><th>Due</th><th>Status</th><th>Parts</th></tr></thead><tbody>${rows.map(({w, t, s}) => `<tr><td>${esc(w.id)}</td><td>${esc(t.t)}</td><td>${esc(s.due)}</td><td><span class="pill ${s.cls}">${esc(s.label)}</span></td><td>${esc(t.parts)}</td></tr>`).join("")}</tbody></table></div><p class="src">Only tasks with a recorded history can be shown as due. Record one completion per task to start the clock.</p></div>` : `<div class="rep"><p>Nothing is overdue or due soon among tasks that have been recorded at least once.</p></div>`;
+    addReportItem("Maintenance due list", "Maintenance", h);
+  });
+}
+
+/* ---------------- equipment and parts ---------------- */
+const EQUIP = {
+  "MS-3":  {eng: "Cat 3406C DITA", engSn: "6TB16898", hp: 325, pump: "Floway 14 DKH, 6 stages", pumpSn: "25671-5-1", gear: "Amarillo S-500-A VHS, 500 hp, 1:1", gearSn: "209594", hx: "Corona Free-Flow 18-160-18, 12 in", hxSn: "1301", meter: "McCrometer MW500, 12 in", col: 12.75, wall: 0.375, head: 12, shaftLen: 452, tubes: 90, brgs: 91},
+  "MS-10": {eng: "Cat 3408C DITA", engSn: "67U17604", hp: 465, pump: "Floway 16 DKL, 4 stages", pumpSn: "25671-7-1", gear: "Amarillo S-600-A VHS, 600 hp, 1:1", gearSn: "209627", hx: "Corona Free-Flow 22-233-18, 14 in", hxSn: "1300", meter: "McCrometer MW500, 14 in", col: 14, wall: 0.375, head: 14, shaftLen: 453, tubes: 90, brgs: 91},
+  "MS-11": {eng: "Cat 3412C DITTA", engSn: "38S18675", hp: 715, pump: "Floway 18 MKM, 4 stages", pumpSn: "25671-9-1", gear: "Amarillo S-600-A VHS, 600 hp, 1:1", gearSn: "209626", hx: "Corona Free-Flow 22-233-18, 14 in", hxSn: "1299", meter: "McCrometer MW500, 14 in", col: 14, wall: 0.375, head: 14, shaftLen: 453, tubes: 90, brgs: 91},
+  "BC-4":  {eng: "Cat 3406C DITA", engSn: "6TB17396", hp: 325, pump: "Floway 14 DKH, 6 stages", pumpSn: "27588-1-1", gear: "Amarillo S-450-A VHS, 450 hp, 1:1", gearSn: "215493", hx: "Corona Free-Flow 18-160-18, 12 in", hxSn: "1341", meter: "McCrometer MW500, 12 in", col: 10.75, wall: 0.365, head: 12, shaftLen: 362, tubes: 72, brgs: 73},
+  "BC-10": {eng: "Cat 3412C DITTA", engSn: "38S18677", hp: 715, pump: "Floway 18 MKH, 3 stages", pumpSn: "25671-1-1", gear: "Amarillo S-750-A VHS, 750 hp, 1:1", gearSn: "210064", hx: "Corona Free-Flow 22-233-18, 16 in", hxSn: "1297", meter: "McCrometer MW500, 16 in", col: 16, wall: 0.375, head: 16, shaftLen: 408, tubes: 81, brgs: 82},
+  "BC-11": {eng: "Cat 3408C DITA", engSn: "6U17759", hp: 465, pump: "Floway 18 MKH, 2 stages", pumpSn: "25671-3-1", gear: "Amarillo S-450-A VHS, 450 hp, 1:1", gearSn: "213425", hx: "Corona Free-Flow 22-233-18, 14 in", hxSn: "1298", meter: "McCrometer MW500, 14 in", col: 14, wall: 0.375, head: 14, shaftLen: 303, tubes: 60, brgs: 61},
+  "BC-15": {eng: "Cat 3408C DITA", engSn: "6U17603", hp: 465, pump: "Floway 14 DKH, 9 stages", pumpSn: "27588-3-1", gear: "Amarillo S-450-A VHS, 450 hp, 1:1", gearSn: "212218", hx: "Corona Free-Flow 22-233-18, 12 in", hxSn: "1340", meter: "McCrometer MW500, 12 in", col: 12.75, wall: 0.375, head: 12, shaftLen: 553, tubes: 110, brgs: 111},
+  "BC-16": {eng: "Cat 3408C DITA", engSn: "6U17728", hp: 465, pump: "Floway 14 DKH, 7 stages", pumpSn: "27588-6-1", gear: "Amarillo S-450-A VHS, 450 hp, 1:1", gearSn: "290608", hx: "Corona Free-Flow 22-233-18, 12 in", hxSn: "1345", meter: "McCrometer MW500, 12 in", col: 12.75, wall: 0.375, head: 12, shaftLen: 553, tubes: 110, brgs: 111}
+};
+const COLUMN_PIPE = [[10.75, 10.02, 0.365, 40.48], [12.75, 12.00, 0.375, 49.56], [14, 13.25, 0.375, 54.57], [16, 15.25, 0.375, 62.58]];
+const OILS = ["Amoco American Industrial 32", "Exxon Teresstic 32", "Mobil DTE Light", "Conoco 32", "Shell Tellus 32", "Texaco Regal R&O 32", "Phillips 66 Magnus 32", "Unocal Turbine Oil 32"];
+const OILS_FG = ["Chevron FM Lubricating Oil 32", "ARCOwhite Oil 32 (Lyondell)"];
+const EQ_TABS = [["installed", "Installed equipment"], ["engine", "Diesel engines"], ["pump", "Pumps, column and lineshaft"], ["gear", "Gear drives"], ["hx", "Heat exchangers"], ["meter", "Flow meters"], ["parts", "Parts and consumables"], ["buy", "Purchase specification"]];
+function eqInstalled(){
+  const rows = Object.entries(EQUIP).map(([id, e]) => {
+    const w = getWell(id) || {};
+    return `<tr><td><strong>${esc(id)}</strong><br><span class="src">${isNum(w.q) ? fmt(w.q) + " gpm at " + fmt(w.tdh) + " ft" : ""}</span></td>
+    <td>${esc(e.eng)}<br><span class="src">s/n ${esc(e.engSn)} \u00b7 ${fmt(e.hp)} hp \u00b7 1,800 rpm</span></td>
+    <td>${esc(e.pump)}<br><span class="src">s/n ${esc(e.pumpSn)} \u00b7 set ${fmt(w.set)} ft</span></td>
+    <td>${esc(e.gear)}<br><span class="src">s/n ${esc(e.gearSn)}</span></td>
+    <td>${esc(e.hx)}<br><span class="src">s/n ${esc(e.hxSn)}</span></td>
+    <td>${esc(e.meter)}</td>
+    <td>${fmt(e.col, 2)} in \u00d7 ${e.wall} in wall<br><span class="src">${fmt(e.tubes)} tube sections \u00b7 ${fmt(e.brgs)} bearings</span></td></tr>`;
+  }).join("");
+  return `<p>Everything recorded in the 1997 Upper Eagle Creek O&amp;M manual. Quote the serial number when ordering parts.</p>
+  <div class="tbl-wrap"><table><thead><tr><th>Well</th><th>Engine</th><th>Pump</th><th>Gear drive</th><th>Heat exchanger</th><th>Flow meter</th><th>Column</th></tr></thead><tbody>${rows}</tbody></table></div>
+  <p class="src">All eight use enclosed oil-lubricated lineshafts: 2-3/16 in C1045 shaft in 20 ft sections, 3-1/2 in Schedule 80 oil tubing in 5 ft sections, bronze bearings threaded 12 TPI left-hand, and ASTM A53B column pipe with 3/16 in taper threads.</p>`;
+}
+function eqEngine(){
+  return `<p>Every 1997 well is driven by a Caterpillar engine through a right-angle gear drive, with a Corona heat exchanger cooled by the pumped water. Manual Section 7.5 recommends replacing this train with an electric motor and VFD where power is available; where an engine stays, these are the service points.</p>
+  <h3>What is installed</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Model</th><th>Wells</th><th class="num">Rated</th><th>Notes</th></tr></thead><tbody>
+  <tr><td>Cat 3406C DITA</td><td>MS-3, BC-4</td><td class="num">325 hp</td><td>Six cylinder, turbocharged and aftercooled, 1,800 rpm, 1,300\u20131,800 rpm operating range</td></tr>
+  <tr><td>Cat 3408C DITA</td><td>MS-10, BC-11, BC-15, BC-16</td><td class="num">465 hp</td><td>V8, turbocharged and aftercooled</td></tr>
+  <tr><td>Cat 3412C DITTA</td><td>MS-11, BC-10</td><td class="num">715 hp</td><td>V12, twin turbocharged and aftercooled</td></tr>
+  </tbody></table></div>
+  <h3>Service schedule (typical for this engine class)</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Interval</th><th>Work</th><th>Consumables</th></tr></thead><tbody>
+  <tr><td>Every shift / daily</td><td>Oil, coolant and fuel levels; leaks; belts; drain the water separator; record hours, oil pressure and exhaust temperature</td><td>\u2014</td></tr>
+  <tr><td>250 h or 6 months</td><td>Engine oil and filters; sample oil for analysis (wear metals, fuel dilution, soot)</td><td>SAE 15W-40 CH-4 or later oil; oil and bypass filters</td></tr>
+  <tr><td>500 h or yearly</td><td>Primary and secondary fuel filters, air cleaner element, precleaner; check the charge-air cooler</td><td>Fuel and air filters</td></tr>
+  <tr><td>1,000 h</td><td>Coolant test (freeze point and supplemental coolant additive), belts, hoses, mounts, battery</td><td>Coolant, SCA, test strips</td></tr>
+  <tr><td>2,000 h</td><td>Valve lash, injector and turbocharger inspection, blow-by check</td><td>Gasket and seal kit</td></tr>
+  <tr><td>Every 2\u20133 years</td><td>Cooling system clean and refill; heat exchanger service (see the heat exchanger tab)</td><td>Coolant, gaskets, anodes</td></tr>
+  <tr><td>10,000 h or on oil analysis</td><td>Top-end or full overhaul assessment</td><td>Overhaul kit</td></tr>
+  </tbody></table></div>
+  <p class="src">Intervals are typical for this engine family and the duty here. Confirm against the Caterpillar Operation and Maintenance Manual for your engine serial number; the 1997 manual holds the original dimension sheets, data sheets, spare parts list, electrical schematics and warranty.</p>
+  <h3>Buying or replacing</h3>
+  <ul class="notes">
+  <li>Specify EPA Tier 4 Final, renewable-diesel capable, with a closed-loop radiator rather than a water-cooled heat exchanger, so pumped water is never diverted or heated (manual 7.5).</li>
+  <li>Match the gear drive rating: the engine's rated power must not exceed the gear drive's thrust and horsepower rating at 1,800 rpm.</li>
+  <li>Ask for the fuel map at 1,300\u20131,800 rpm so the energy comparison in the Calculators tab uses real fuel rates.</li>
+  <li>For remote sites keep 72 h of fuel in a double-wall tank with containment and an automatic transfer switch.</li>
+  </ul>`;
+}
+function eqPump(){
+  return `<p>All eight wells use Floway vertical turbine pumps with enclosed oil-lubricated lineshafts and type F discharge heads.</p>
+  <h3>Column, shaft and bearing specification (1997 as-built)</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Component</th><th>Specification</th></tr></thead><tbody>
+  <tr><td>Column pipe</td><td>ASTM A53B, 20 ft sections, 3/16 in taper thread. Sizes used: ${COLUMN_PIPE.map(c => `${c[0]} in OD \u00d7 ${c[2]} in wall (${c[3]} lb/ft)`).join("; ")}</td></tr>
+  <tr><td>Oil tubing</td><td>3-1/2 in Schedule 80, 4.000 in OD, 3.384 in ID, 5 ft sections</td></tr>
+  <tr><td>Lineshaft</td><td>C1045 carbon steel, 2-3/16 in diameter, 20 ft sections, about 12.8 lb/ft</td></tr>
+  <tr><td>Shaft couplings</td><td>C1045, 5-1/2 in long, 10 TPI</td></tr>
+  <tr><td>Tube bearings</td><td>Bronze, nominal 3-1/2 in \u00d7 2-3/16 in, 12 TPI left-hand thread, one every 5 ft</td></tr>
+  <tr><td>Lubrication</td><td>ISO 32 turbine oil with rust and oxidation inhibitors, 145\u2013175 SUS at 100 \u00b0F, viscosity index 90 minimum</td></tr>
+  </tbody></table></div>
+  <h3>Approved lubricating oils (1997 manual)</h3>
+  <p>${OILS.map(esc).join(" \u00b7 ")}. Where a food-grade (NSF H1 / USDA H1) oil is required: ${OILS_FG.map(esc).join(" \u00b7 ")}.</p>
+  <h3>Wear limits and inspection</h3>
+  <ul class="notes">
+  <li>Measure bowl bearing and wear-ring clearances at every pump pull and compare with the new and maximum allowable diametric running clearances in the 1997 manual (Section 18). Stainless parts run 50% more clearance than bronze.</li>
+  <li>Check pipe and shaft stretch against the bowl lateral before setting the impellers; the manual gives the stretch formula and constants.</li>
+  <li>Check shaft straightness, coupling threads and the top shaft adjusting nut; replace any shaft with runout beyond the manufacturer's limit.</li>
+  <li>Use the affinity laws to re-rate a pump after a speed change: flow with speed, head with speed squared, power with speed cubed.</li>
+  </ul>
+  <h3>Buying or replacing</h3>
+  <ul class="notes">
+  <li>Duty point inside 80\u2013110% of best efficiency flow and in the ANSI/HI 9.6.3 preferred region across the VFD speed range; NPSH available at least 1.5 times required.</li>
+  <li>Materials follow the water class from the Corrosion and scaling calculator: enamel-lined cast iron where water is mild; CF8M stainless bowls with 316 or duplex column and shaft for district water.</li>
+  <li>Prefer water-lubricated open lineshaft or a submersible pump where the well serves drinking water; keep NSF H1 oil if the enclosed lineshaft stays.</li>
+  <li>Specify to AWWA E103, with a factory performance test and a field test at three flow points.</li>
+  </ul>`;
+}
+function eqGear(){
+  return `<p>Amarillo right-angle gear drives, vertical hollow shaft, 1:1 ratio, with non-reverse ratchets (NRR), turning clockwise/counter-clockwise as installed.</p>
+  <div class="tbl-wrap"><table><thead><tr><th>Model</th><th>Rating</th><th>Wells</th><th>Serial numbers</th></tr></thead><tbody>
+  <tr><td>S-450-A</td><td>450 hp at 1,800 rpm</td><td>BC-4, BC-11, BC-15, BC-16</td><td>215493, 213425, 212218, 290608</td></tr>
+  <tr><td>S-500-A</td><td>500 hp</td><td>MS-3</td><td>209594</td></tr>
+  <tr><td>S-600-A</td><td>600 hp</td><td>MS-10, MS-11</td><td>209627, 209626</td></tr>
+  <tr><td>S-750-A</td><td>750 hp</td><td>BC-10</td><td>210064</td></tr>
+  </tbody></table></div>
+  <h3>Maintenance</h3>
+  <ul class="notes">
+  <li>Check the oil level weekly and look for leaks at the input and output seals.</li>
+  <li>Change the oil after the first 500 h, then yearly or about every 2,500 h. Use the grade in the Amarillo manual (commonly an AGMA extreme-pressure gear oil, ISO 220 class); clean or replace the breather at the same time.</li>
+  <li>Inspect the non-reverse ratchet yearly: a failed ratchet lets the pump spin backwards on shutdown and can unscrew the lineshaft.</li>
+  <li>Check thrust bearing condition and end play, and the drive shaft, yokes, slip joint and bearing plates (1997 manual, Section 13); grease the slip joint and confirm guards are fitted.</li>
+  <li>Record oil temperature and vibration; a rising oil temperature usually means bearing or alignment trouble.</li>
+  </ul>
+  <h3>Buying or replacing</h3>
+  <ul class="notes">
+  <li>Rate the drive for the engine's full power plus the pump's down-thrust at maximum head, with a service factor of at least 1.5.</li>
+  <li>Confirm the hollow-shaft bore suits the pump head shaft and that the non-reverse ratchet matches the rotation.</li>
+  <li>When converting to electric drive, the gear drive and drive shaft are removed entirely and replaced by a vertical hollow-shaft motor with its own non-reverse ratchet.</li>
+  </ul>`;
+}
+function eqHx(){
+  return `<p>Corona Free-Flow shell-and-tube heat exchangers cool the engine jacket water using pumped well water.</p>
+  <div class="tbl-wrap"><table><thead><tr><th>Model</th><th>Wells</th><th>Connection</th></tr></thead><tbody>
+  <tr><td>18-160-18</td><td>MS-3, BC-4</td><td>12 in</td></tr>
+  <tr><td>22-233-18</td><td>MS-10, MS-11, BC-10, BC-11, BC-15, BC-16</td><td>12\u201316 in as installed</td></tr>
+  </tbody></table></div>
+  <h3>Maintenance</h3>
+  <ul class="notes">
+  <li>Watch engine coolant temperature: a slow rise under the same load usually means scale or silt in the tubes.</li>
+  <li>Inspect and clean the tube bundle yearly. In district water, which is supersaturated with calcite, expect carbonate scale; clean with inhibited acid and rinse thoroughly.</li>
+  <li>Check sacrificial anodes every six months and replace when half consumed.</li>
+  <li>Pressure-test the bundle every five years or after any cleaning that finds pitting; replace gaskets at every opening.</li>
+  <li>Never run the engine with the well pump off: the exchanger relies on pumped water for cooling flow.</li>
+  </ul>
+  <h3>Buying or replacing</h3>
+  <ul class="notes">
+  <li>Best practice today is a closed-loop radiator, so pumped water is neither diverted nor warmed (warming raises the scaling rate).</li>
+  <li>If a water-cooled exchanger is kept, specify a removable bundle, 90/10 copper-nickel or titanium tubes for scaling and corrosive water, and isolation valves plus a bypass for cleaning without shutting the well.</li>
+  <li>Size on the engine's heat rejection at full load with the highest expected well-water temperature and a fouling allowance.</li>
+  </ul>`;
+}
+function eqMeter(){
+  return `<p>McCrometer MW500 series main-line propeller meters, built to AWWA C704 (accuracy about \u00b12% of reading). Spare assemblies tested in 1997: MW512 (12 in, 2,500 gpm), MW514 (14 in, 3,812 gpm), MW516 (16 in, 4,000 gpm).</p>
+  <h3>Installation and accuracy</h3>
+  <ul class="notes">
+  <li>Straight pipe: at least 5 pipe diameters upstream and 1\u20132 downstream for a propeller meter (a magnetic meter needs 5 up and 3 down). Valves, elbows and pump discharges upstream spin the flow and bias the reading.</li>
+  <li>The pipe must run full at the meter. Fit straightening vanes where the straight run is short.</li>
+  <li>Check the register totalizer and the instantaneous rate against the SCADA flow signal each month; investigate differences over 5%.</li>
+  </ul>
+  <h3>Maintenance</h3>
+  <ul class="notes">
+  <li>Yearly: verify accuracy against a reference (portable ultrasonic clamp-on or a drawdown test) and record the result.</li>
+  <li>Every 2 years or when the register hesitates: pull the meterhead, inspect the propeller, shaft, bearings and drive cable, replace worn bearings and O-rings, and use only a drop of thread locker on the bearing nut (too much seizes the aft bearing).</li>
+  <li>On wells that coast down after shutdown, check the over-run bearing discussed in the 1997 manual, which stops the propeller spinning backwards.</li>
+  <li>Keep the certified test report for each meter and serial number with the well file.</li>
+  </ul>
+  <h3>Buying or replacing</h3>
+  <ul class="notes">
+  <li>Manual Section 7.4 prefers a magnetic flow meter for new work: no moving parts, no bearing wear, and better accuracy at low flow.</li>
+  <li>Specify the meter size for the pipe and rate (keep velocity roughly 2\u201312 ft/s), AWWA Class D flanges for up to 150 psi (MZ500 body to 300 psi), a 4\u201320 mA output to SCADA, and a factory calibration certificate.</li>
+  </ul>`;
+}
+function eqParts(){
+  return `<p>Spare parts the 1997 manual recommends holding, plus the consumables each service needs. Quote the pump, gear drive or engine serial number from the Installed equipment tab when ordering.</p>
+  <h3>Bowl assembly spares (per pump)</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Part</th><th>Typical specification</th><th>Material</th></tr></thead><tbody>
+  <tr><td>Discharge case and head O-rings</td><td>3.875 \u00d7 0.188 in; 5.375 \u00d7 0.250 in; 2.250 \u00d7 2.438 \u00d7 0.094 in</td><td>BUNA N</td></tr>
+  <tr><td>Bowl bearings</td><td>Sized to the 2-3/16 in shaft; one per bowl plus suction and discharge bearings</td><td>Bronze 932 / 844 / 943, or Vellumod in sandy water</td></tr>
+  <tr><td>Throttle bushings</td><td>1.938 \u00d7 2.438 \u00d7 8.50 in and similar by bowl size</td><td>Bronze 932</td></tr>
+  <tr><td>Bowl wear rings</td><td>By bowl size, e.g. 14 DKH 7.375 \u00d7 7.813 \u00d7 1.250 in; 16 DK 9.250 \u00d7 9.625 \u00d7 1.38 in; 18 MK 10.500 \u00d7 11.000 in</td><td>Bronze 932 / 954</td></tr>
+  <tr><td>Suction and discharge bearings</td><td>2.250 \u00d7 2.750 \u00d7 10.000 in and similar</td><td>Bronze 932</td></tr>
+  </tbody></table></div>
+  <p class="src">The manual lists each part with its reference number and size for every pump in the field; check the list for the exact well before ordering.</p>
+  <h3>Column and lineshaft spares</h3>
+  <ul class="notes">
+  <li>Bronze tube bearings, 3-1/2 \u00d7 2-3/16 in, 12 TPI left-hand \u2014 keep at least 10% of the installed count (see the Installed equipment tab).</li>
+  <li>One 20 ft lineshaft section and two couplings (C1045, 5-1/2 in, 10 TPI).</li>
+  <li>One column pipe joint of the well's size, plus thread protectors and pipe dope.</li>
+  <li>Oil tubing sections (3-1/2 in Sch 80, 5 ft) and tube adapters.</li>
+  <li>Top shaft adjusting nut, packing or mechanical seal set for the discharge head.</li>
+  </ul>
+  <h3>Consumables</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Specification</th><th>Where used</th></tr></thead><tbody>
+  <tr><td>Lineshaft oil</td><td>ISO 32 turbine oil, R&amp;O inhibited (NSF H1 where required)</td><td>Enclosed lineshaft drip feed</td></tr>
+  <tr><td>Gear oil</td><td>AGMA extreme-pressure gear oil per the Amarillo manual</td><td>Right-angle gear drives</td></tr>
+  <tr><td>Engine oil and filters</td><td>SAE 15W-40 CH-4 or later; oil, fuel and air filters</td><td>Caterpillar engines</td></tr>
+  <tr><td>Coolant and SCA</td><td>Extended-life coolant with supplemental additive</td><td>Engine and heat exchanger</td></tr>
+  <tr><td>Chlorine</td><td>65% calcium hypochlorite granules or 12.5% sodium hypochlorite</td><td>Disinfection after any well work</td></tr>
+  <tr><td>Rehabilitation chemicals</td><td>Inhibited sulfamic or hydrochloric acid, surfactant, neutralizer</td><td>Scale and biofouling treatment</td></tr>
+  <tr><td>Instrument spares</td><td>Pressure transmitter, level transducer, meter register, VFD filters and fans</td><td>Wellhead and control building</td></tr>
+  </tbody></table></div>
+  <h3>Parts and quantities for a pump pull</h3>
+  <div class="fields" style="max-width:640px">
+    <label class="f">Well<select id="eq_pw"></select></label>
+    <label class="f">Setting depth <span class="unit">ft</span><input type="number" id="eq_set"></label>
+    <label class="f">Column pipe size <span class="unit">in OD</span><select id="eq_col">${COLUMN_PIPE.map(c => `<option value="${c[0]}">${c[0]} in \u00d7 ${c[2]} in wall</option>`).join("")}</select></label>
+  </div>
+  <div class="results" id="eq_qty" style="margin-top:12px"></div>
+  <ul class="notes" id="eq_qtynotes"></ul>`;
+}
+function eqQty(){
+  const set = num("eq_set"), col = Number($("eq_col").value);
+  if (!isNum(set) || set <= 0){ results($("eq_qty"), []); return; }
+  const pipe = COLUMN_PIPE.find(c => c[0] === col) || COLUMN_PIPE[1];
+  const joints = Math.ceil(set / 20), shafts = Math.ceil(set / 20), tubes = Math.ceil(set / 5), brgs = tubes + 1;
+  const oilGal = 0.148 * set;
+  const weight = pipe[3] * set + 12.8 * set + 10.88 * tubes;
+  results($("eq_qty"), [
+    ["Column joints (20 ft)", fmt(joints), ""], ["Lineshaft sections (20 ft)", fmt(shafts), ""], ["Shaft couplings", fmt(shafts), ""],
+    ["Oil tube sections (5 ft)", fmt(tubes), ""], ["Bronze tube bearings", fmt(brgs), ""], ["Oil to fill the tube", fmt(oilGal, 1), "gal"],
+    ["String weight (dry)", fmt(weight), "lb"], ["Suggested spare bearings", fmt(Math.max(4, Math.ceil(brgs * 0.1))), ""]
+  ]);
+  notes($("eq_qtynotes"), [
+    ["", `Crane or rig capacity must exceed the dry string weight of about ${fmt(weight)} lb plus the bowl assembly, with a lifting margin of at least 1.5.`],
+    ["", "Order O-ring and gasket kits, a top shaft adjusting nut and thread compound with every pull; replace all bearings that are outside the allowable clearance."],
+    ["warn", "Confirm the bearing count against the well record: the 1997 wells use one bearing per 5 ft tube section plus one at the discharge head."]
+  ]);
+}
+function eqBuySpec(){
+  const wid = $("eq_bw").value, item = $("eq_bitem").value, w = getWell(wid) || {};
+  const e = EQUIP[wid] || {};
+  const chem = hasChem(w) ? computeChem(w) : null;
+  const mats = chem ? chem.cls : "unknown (sample the water first)";
+  const dp = designInputs(w), d = computeDesign(dp.p);
+  const q = isNum(w.q) ? w.q : dp.p.q, tdh = isNum(w.tdh) ? w.tdh : d.tdh;
+  const assumed = !isNum(w.q) || !isNum(w.tdh);
+  const head = [`<p><strong>Well:</strong> ${esc(wid)} · ${esc(w.area || "")} · duty ${fmt(q)} gpm at ${fmt(tdh)} ft · water class ${esc(mats)}</p>`,
+    assumed ? `<p class="src"><strong>The duty and sizes below are calculated from assumed values</strong> because this well has no recorded rate or head. Open the well's design report to see which inputs are defaults, and edit the well before issuing this specification.</p>` : ""];
+  const common = `<p class="src">Issue with the well's design report and water analysis. Bidders confirm dimensions on site. All wetted materials certified to NSF/ANSI/CAN 61.</p>`;
+  const S = {
+    pump: `<h3>Vertical turbine pump</h3><ul class="notes">
+      <li>Duty: ${fmt(q)} gpm at ${fmt(tdh)} ft total dynamic head, continuous, within 80\u2013110% of best efficiency flow across a 70\u2013100% VFD speed range.</li>
+      <li>Bowl assembly: ${esc(e.pump || `${d.bowl} in nominal bowls`)}; efficiency at duty to be stated; NPSH required at duty to be stated (NPSHa/NPSHr \u2265 1.5).</li>
+      <li>Materials: ${chem && chem.cls !== "Low" ? "CF8M stainless bowls and impellers; 316 or duplex column, shaft and fasteners" : "cast iron bowls with fusion-bonded epoxy or enamel lining; bronze bearings; steel column"}.</li>
+      <li>Column: ${fmt(e.col || 12.75, 2)} in OD \u00d7 ${e.wall || 0.375} in wall, 20 ft sections, ASTM A53B, 3/16 in taper thread; setting ${fmt(isNum(w.set) ? w.set : d.set)} ft.</li>
+      <li>Lineshaft: 2-3/16 in minimum, 20 ft sections with C1045 or 416 stainless couplings; ${w.area === "Upper Eagle Creek" ? "enclosed oil-lubricated with bronze bearings at 5 ft spacing (NSF H1 oil)" : "water-lubricated open lineshaft preferred"}.</li>
+      <li>Discharge head: ${fmt(e.head || 12)} in flanged, with non-reverse ratchet, pre-lube and pressure gauge connections.</li>
+      <li>Testing: factory performance test to AWWA E103 with certified curve; field test at three flow points; vibration within ANSI/HI 9.6.4 limits.</li>
+      <li>Supply: installation manual, parts list with reference numbers, and a recommended spare parts list.</li></ul>`,
+    motor: `<h3>Motor and variable frequency drive</h3><ul class="notes">
+      <li>Vertical hollow-shaft motor, ${fmt(d.motor)} hp, 1,800 rpm, NEMA Premium or IE4, inverter-duty insulation, non-reverse ratchet, winding and bearing RTDs, space heater.</li>
+      <li>Enclosure suited to an outdoor desert site (WPI with filters or TEFC), 50 \u00b0C ambient rating, thrust bearing rated for the pump's maximum down-thrust with L10 life of at least 5 years.</li>
+      <li>VFD: 18-pulse or active front end, total harmonic distortion under 5% at the point of connection (IEEE 519), output dv/dt filter for the lead length, bypass contactor, level and flow control inputs, 30 s minimum ramp.</li>
+      <li>Estimated load: about ${fmt(d.kw)} kW at duty. Supply a harmonic study and a factory witness test.</li></ul>`,
+    engine: `<h3>Diesel engine drive</h3><ul class="notes">
+      <li>Rated ${fmt(e.hp || Math.ceil(d.bhpL / 25) * 25)} hp continuous at 1,800 rpm with a 10% margin over the pump's maximum brake power; EPA Tier 4 Final; renewable diesel capable.</li>
+      <li>Closed-loop radiator cooling (no well-water heat exchanger); engine-mounted fuel filters and water separator; air cleaner with precleaner for dusty sites.</li>
+      <li>Controls: automatic start/stop, over-speed, low oil pressure, high coolant temperature and low water level shutdowns, hour meter, SCADA contacts.</li>
+      <li>Fuel: double-wall tank with 72 h capacity and secondary containment.</li>
+      <li>Supply: operation and maintenance manual, parts book, recommended spares, fuel map at 1,300\u20131,800 rpm and warranty statement.</li></ul>`,
+    gear: `<h3>Right-angle gear drive</h3><ul class="notes">
+      <li>Vertical hollow shaft, 1:1 ratio, rated at least ${fmt((e.hp || d.motor) * 1.5)} hp service-factored for the driver's full output at 1,800 rpm.</li>
+      <li>Thrust capacity for the pump's maximum down-thrust at shutoff head, with stated bearing L10 life.</li>
+      <li>Non-reverse ratchet matched to rotation; hollow-shaft bore to suit the pump head shaft; drip-proof breather; oil level sight glass and drain.</li>
+      <li>Supply mounting dimensions, oil grade and capacity, and the installation and maintenance manual.</li></ul>`,
+    hx: `<h3>Heat exchanger (only where an engine is kept)</h3><ul class="notes">
+      <li>Shell-and-tube, removable bundle, sized for the engine's full-load heat rejection with well water at its maximum temperature and a fouling factor for scaling water.</li>
+      <li>Tubes: 90/10 copper-nickel or titanium; sacrificial anodes fitted; isolation valves and a cleaning bypass so the well need not be shut down.</li>
+      <li>Design pressure to suit the discharge line; flanged connections to match ${fmt(e.head || 12)} in piping.</li>
+      <li>Supply cleaning instructions, gasket and anode part numbers.</li></ul>`,
+    meter: `<h3>Flow meter</h3><ul class="notes">
+      <li>Preferred: full-bore magnetic flow meter, line size to suit ${fmt(q)} gpm at 2\u201312 ft/s, accuracy \u00b10.5% of reading, 4\u201320 mA and pulse outputs, local totalizer, IP68 sensor.</li>
+      <li>Straight pipe: 5 diameters upstream, 3 downstream. Propeller alternative to AWWA C704 (accuracy about \u00b12%) where a mechanical register is required.</li>
+      <li>Supply a factory calibration certificate traceable to a recognized standard, and a service kit.</li></ul>`,
+    screen: `<h3>Casing and screen</h3><ul class="notes">
+      <li>Screen: ${fmt(dp.p.dia)} in ${chem ? esc(chem.screen) : "316L"} continuous-slot wire-wrap, ${isNum(w.d30) ? packFor(w.d30, 5).slot.toFixed(3) + " in slot" : "slot from the pack sieve analysis"}, open area at least ${fmt(dp.p.open)}%, ${fmt(d.Lr)} ft total, with certified mill test reports.</li>
+      <li>Casing: ${d.casing} in ID pump chamber, ${chem ? esc(chem.casingBelow) : "316L"} below the static level, 0.375 in minimum wall, welded by certified welders with full-penetration joints.</li>
+      <li>Filter pack: ${isNum(w.d30) ? esc(packFor(w.d30, 5).pick[0]) + " silica" : "graded silica to the sieve analysis"}, washed and bagged, with gradation certificates.</li>
+      <li>Accessories: centralizers at 40 ft, dielectric isolation joints, 1.25 in and 1 in 316L tubes, 2 in gravel-feed tube, welded bottom plate.</li></ul>`
+  };
+  return {title: `Purchase specification: ${item} for ${wid}`, html: `<div class="rep">${head.join("")}${S[item] || ""}${common}</div>`};
+}
+function renderEquip(tab){
+  const body = {installed: eqInstalled, engine: eqEngine, pump: eqPump, gear: eqGear, hx: eqHx, meter: eqMeter, parts: eqParts}[tab];
+  if (tab === "buy"){
+    $("eq_body").innerHTML = `<div class="fields" style="max-width:640px">
+      <label class="f">Well<select id="eq_bw"></select></label>
+      <label class="f">Item to buy<select id="eq_bitem">
+        <option value="pump">Vertical turbine pump</option><option value="motor">Motor and VFD</option><option value="engine">Diesel engine drive</option>
+        <option value="gear">Right-angle gear drive</option><option value="hx">Heat exchanger</option><option value="meter">Flow meter</option><option value="screen">Casing and screen</option>
+      </select></label></div>
+      <div class="row" style="margin-top:10px"><button class="btn" id="eq_gen">Build specification</button><button class="btn ghost" id="eq_dl">Download</button><button class="btn ghost" id="eq_add">Add to project report</button></div>
+      <div id="eq_spec" style="margin-top:14px"></div>`;
+    const opts = WELLS().map(w => `<option value="${esc(w.id)}">${esc(w.id)}</option>`).join("");
+    $("eq_bw").innerHTML = opts;
+    const run = () => { const r = eqBuySpec(); $("eq_spec").innerHTML = r.html; return r; };
+    $("eq_gen").onclick = run;
+    $("eq_bw").onchange = run; $("eq_bitem").onchange = run;
+    $("eq_dl").onclick = () => { const r = run(); saveFile(`${fileSafe(r.title)}.html`, docWrap(r.title, r.html, {kind: "Purchase specification"}), "text/html"); };
+    $("eq_add").onclick = () => { const r = run(); addReportItem(r.title, "Purchase specification", r.html); };
+    run();
+    return;
+  }
+  $("eq_body").innerHTML = `<div class="rep">${body()}</div>`;
+  if (tab === "parts"){
+    $("eq_pw").innerHTML = `<option value="">Enter my own</option>` + Object.keys(EQUIP).map(id => `<option value="${id}">${id}</option>`).join("");
+    $("eq_pw").onchange = () => { const e = EQUIP[$("eq_pw").value], w = getWell($("eq_pw").value); if (!e) return; $("eq_set").value = isNum(w && w.set) ? w.set : e.shaftLen; $("eq_col").value = String(e.col); eqQty(); };
+    ["eq_set", "eq_col"].forEach(i => $(i).addEventListener("input", eqQty));
+    $("eq_set").value = 450; eqQty();
+  }
+}
+function setupEquip(){
+  $("eqTabs").innerHTML = EQ_TABS.map(([id, l]) => `<button role="tab" data-e="${id}">${esc(l)}</button>`).join("");
+  $("eqTabs").querySelectorAll("button").forEach(b => b.addEventListener("click", () => showEquip(b.dataset.e)));
+  $("eq_dlall").addEventListener("click", () => {
+    const html = `<div class="rep">${eqInstalled()}<h2>Diesel engines</h2>${eqEngine()}<h2>Pumps, column and lineshaft</h2>${eqPump()}<h2>Gear drives</h2>${eqGear()}<h2>Heat exchangers</h2>${eqHx()}<h2>Flow meters</h2>${eqMeter()}<h2>Parts and consumables</h2>${eqParts().split('<h3>Parts and quantities')[0]}</div>`;
+    saveFile("equipment_guide.html", docWrap("Equipment and parts guide", html, {kind: "Equipment guide"}), "text/html");
+  });
+  $("eq_addall").addEventListener("click", () => {
+    const html = `<div class="rep">${eqInstalled()}${eqEngine()}${eqGear()}${eqHx()}${eqMeter()}</div>`;
+    addReportItem("Equipment and parts guide", "Equipment", html);
+  });
+  showEquip(store.get("wt_eqtab", "installed"));
+}
+function showEquip(tab){
+  $("eqTabs").querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.e === tab));
+  store.set("wt_eqtab", tab);
+  renderEquip(tab);
+}
+
 /* ---------------- troubleshoot ---------------- */
 function renderTrouble(){
   const q=$("t_search").value.toLowerCase();
@@ -2489,7 +2994,7 @@ function renderTrouble(){
   $("lg_well").addEventListener("change",()=>{ const b=BASES[$("lg_well").value]; $("lg_base").value = b ?? ""; });
   $("ck_add").addEventListener("click",addJob);
   LOGS=[]; renderLogs(); renderJobs();
-  setupSearch(); setupData(); setupWellsUi(); setupExplore(); setupReports(); addCalcButtons();
+  setupSearch(); setupData(); setupWellsUi(); setupExplore(); setupReports(); addCalcButtons(); setupMaintain(); setupEquip();
   $("dt_import_lbl").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); $("dt_import").click(); } });
   startLocal();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>calcAll());
