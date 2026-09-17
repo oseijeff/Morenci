@@ -554,7 +554,36 @@ mark{background:var(--warn-soft);color:inherit;padding:0 2px;border-radius:3px}
         <h1 id="h-maintain">Maintenance</h1>
         <p>A maintenance program built for each well from its equipment and water chemistry, with a record of what was done and what is due. Record one completion per task to start its clock.</p>
       </div>
+      <details class="panel" id="sp_panel" open style="margin-bottom:18px">
+        <summary style="cursor:pointer"><strong>Equipment selector</strong> — enter a duty and get the driver, power, meter, column, shaft, oils and materials to specify</summary>
+        <div class="fields" style="margin-top:14px">
+          <label class="f">Load from a well <span class="unit">optional</span><select id="sp_well"><option value="">Enter my own</option></select></label>
+          <label class="f">Design rate <span class="unit">gpm</span><input type="number" id="sp_q" value="2000"></label>
+          <label class="f">Total head <span class="unit">ft</span><input type="number" id="sp_tdh" value="450"></label>
+          <label class="f">Pump setting <span class="unit">ft</span><input type="number" id="sp_set" value="450"></label>
+          <label class="f">Run hours per year<input type="number" id="sp_hours" value="4000"></label>
+          <label class="f">Bowl efficiency <span class="unit">%</span><input type="number" id="sp_eff" value="78"></label>
+          <label class="f">Power available<select id="sp_power"><option value="grid">Grid power</option><option value="solar">Grid plus solar and battery</option><option value="none">No grid (diesel)</option></select></label>
+          <label class="f">Discharge pipe <span class="unit">in, optional</span><input type="number" id="sp_pipe"></label>
+          <label class="f">Chloride <span class="unit">mg/L</span><input type="number" id="sp_cl"></label>
+          <label class="f">Sulfate <span class="unit">mg/L</span><input type="number" id="sp_so4"></label>
+          <label class="f">Bicarbonate <span class="unit">mg/L</span><input type="number" id="sp_hco3"></label>
+          <label class="f">Calcite SI <span class="unit">optional</span><input type="number" id="sp_si" step="0.01"></label>
+          <label class="f">Site elevation <span class="unit">ft</span><input type="number" id="sp_elev" value="4500"></label>
+          <label class="f">Max ambient <span class="unit">°C</span><input type="number" id="sp_amb" value="45"></label>
+          <label class="f">Duty<select id="sp_duty"><option value="continuous">Continuous</option><option value="intermittent">Intermittent</option></select></label>
+        </div>
+        <div class="row" style="margin-top:10px">
+          <label class="check-inline"><input type="checkbox" id="sp_potable"> Drinking-water supply</label>
+          <button class="btn" id="sp_go">Recommend equipment</button>
+          <button class="btn ghost" id="sp_dl">Download</button>
+          <button class="btn ghost" id="sp_add">Add to project report</button>
+          <span class="src" id="sp_msg" role="status"></span>
+        </div>
+        <div id="sp_out" style="margin-top:14px"></div>
+      </details>
       <div class="panel stack">
+        <h2>Maintenance record</h2>
         <div class="fields">
           <label class="f">Well<select id="mt_well"></select></label>
           <label class="f">Task<select id="mt_task"></select></label>
@@ -1081,6 +1110,7 @@ function refreshWellLists(){
   const keep = (id, html) => { const v = $(id).value; $(id).innerHTML = html; if ([...$(id).options].some(o => o.value === v)) $(id).value = v; };
   keep("lg_well", opts);
   keep("mt_well", opts);
+  keep("sp_well", `<option value="">Enter my own</option>` + opts);
   keep("ck_well", `<option value="">General / no well</option>` + opts);
   keep("lg_filter", `<option value="">All wells</option>` + opts);
   keep("c_pick", `<option value="">Enter my own values</option>` + ws.filter(hasChem).map(w => `<option value="${esc(w.id)}">${esc(w.id)}${w.type && w.type !== "—" ? " (" + esc(w.type) + ")" : ""}</option>`).join(""));
@@ -2660,6 +2690,137 @@ function setupMaintain(){
   });
 }
 
+/* ---------------- equipment specifier ---------------- */
+const SHAFT_SIZES = [[1, "1"], [1.1875, "1-3/16"], [1.5, "1-1/2"], [1.6875, "1-11/16"], [1.9375, "1-15/16"], [2.1875, "2-3/16"], [2.4375, "2-7/16"], [2.6875, "2-11/16"], [2.9375, "2-15/16"], [3.1875, "3-3/16"], [3.4375, "3-7/16"]];
+const PIPE_SIZES = [[4, 4.026], [6, 6.065], [8, 7.981], [10, 10.02], [12, 12.0], [14, 13.25], [16, 15.25], [18, 17.25], [20, 19.25], [24, 23.25]];
+const XFMR_KVA = [75, 112.5, 150, 225, 300, 500, 750, 1000, 1500, 2000];
+const shaftHp = d => 24.8 * d * d * d;                       // C1045 lineshaft, about 1,770 rpm
+const shaftLossPer100 = d => 0.22 * d * d;                   // horsepower lost per 100 ft of shaft
+const velFps = (q, id) => 0.4085 * q / (id * id);            // gpm, inches
+const hw100 = (q, id) => 0.2083 * Math.pow(100 / 120, 1.852) * Math.pow(q, 1.852) / Math.pow(id, 4.8655); // ft per 100 ft, C=120
+function specInputs(){
+  const n = id => { const v = $(id).value.trim(); return v === "" ? NaN : Number(v); };
+  return {well: $("sp_well").value, q: n("sp_q"), tdh: n("sp_tdh"), set: n("sp_set"), hours: n("sp_hours"), eff: n("sp_eff"),
+    power: $("sp_power").value, cl: n("sp_cl"), so4: n("sp_so4"), hco3: n("sp_hco3"), si: n("sp_si"),
+    potable: $("sp_potable").checked, elev: n("sp_elev"), amb: n("sp_amb"), duty: $("sp_duty").value, pipe: n("sp_pipe")};
+}
+function specifyEquipment(i){
+  const q = i.q, tdh = i.tdh, set = isNum(i.set) ? i.set : 400, eff = (isNum(i.eff) ? i.eff : 78) / 100;
+  const hours = isNum(i.hours) ? i.hours : 4000, elev = isNum(i.elev) ? i.elev : 4500, amb = isNum(i.amb) ? i.amb : 45;
+  const chem = (isNum(i.cl) && isNum(i.so4) && isNum(i.hco3) && i.hco3 > 0) ? computeChem({cl: i.cl, so4: i.so4, hco3: i.hco3, si: i.si}) : null;
+  const cls = chem ? chem.cls : null;
+  const bowlBhp = q * tdh / 3960 / eff;
+  // column and shaft
+  const col = PIPE_SIZES.find(p => velFps(q, p[1]) <= 9) || PIPE_SIZES[PIPE_SIZES.length - 1];
+  const colV = velFps(q, col[1]), colLoss = hw100(q, col[1]), colHead = colLoss * set / 100;
+  let shaft = SHAFT_SIZES.find(s => shaftHp(s[0]) >= bowlBhp * 1.1) || SHAFT_SIZES[SHAFT_SIZES.length - 1];
+  let shaftLoss = shaftLossPer100(shaft[0]) * set / 100;
+  const surfaceBhp = bowlBhp + shaftLoss;
+  const motorHp = MOTORS.find(m => m >= surfaceBhp * 1.1) || Math.ceil(surfaceBhp * 1.1);
+  const kw = surfaceBhp * 0.746 / (0.95 * 0.97);
+  const kwh = kw * hours;
+  const amps = kw / (1.732 * 0.48 * 0.92);
+  const kva = XFMR_KVA.find(k => k >= kw / 0.9 * 1.25) || Math.ceil(kw / 0.9 * 1.25);
+  const genKw = Math.ceil(kw * 1.3 / 25) * 25;
+  const pvKw = Math.ceil(kw / 0.8 / 10) * 10;                    // carries the running load during sun hours
+  const pvOffset = Math.ceil(kwh / 365 / 5.5 / 10) * 10;         // array to offset all yearly energy, 5.5 peak sun hours
+  const battShut = Math.ceil(kw * 0.5 / 10) * 10, battRide = Math.ceil(kw * 2 / 10) * 10;
+  // meter
+  const meter = PIPE_SIZES.find(p => velFps(q, p[1]) <= 10 && velFps(q, p[1]) >= 2) || col;
+  const meterV = velFps(q, meter[1]);
+  const dis = isNum(i.pipe) ? PIPE_SIZES.find(p => p[0] === i.pipe) || meter : meter;
+  // oils
+  const tubeOil = 0.148 * set;
+  const diesel = i.power === "none" || i.power === "engine";
+  const hybrid = i.power === "solar";
+  const gearHp = Math.ceil(surfaceBhp * 1.5 / 25) * 25;
+  const thrustLb = 2.5 * tdh + 12.8 * set;                       // rough: hydraulic thrust allowance + shaft weight
+  const rows = [];
+  const R = (item, spec, why) => rows.push({item, spec, why});
+  R("Pump", `Vertical turbine, ${q <= 2000 ? "12\u201314" : q <= 3500 ? "14\u201316" : q <= 5000 ? "16\u201318" : "18\u201320"} in bowls, duty ${fmt(q)} gpm at ${fmt(tdh)} ft, inside 80\u2013110% of best efficiency flow`, `Water power ${fmt(q * tdh / 3960)} hp at ${fmt(eff * 100)}% bowl efficiency`);
+  R("Bowl and impeller material", cls ? (cls === "Low" ? "Cast iron bowls, epoxy or enamel lined; bronze impellers and bearings" : "CF8M (316) stainless bowls and impellers; stainless wear rings") : "Enter water chemistry to set this", cls ? `Water class: ${cls}` : "No chemistry entered");
+  R("Column pipe", `${col[0]} in (ID ${col[1]} in), 0.375 in wall, 20 ft sections, ${cls === "Very high" ? "316L or duplex" : cls ? "steel to ASTM A53B (316L below static level where water is aggressive)" : "steel to ASTM A53B"}, 3/16 in taper thread`, `Velocity ${fmt(colV, 1)} ft/s (target under 9; a smaller column runs faster and costs energy); friction ${fmt(colLoss, 2)} ft per 100 ft, about ${fmt(colHead)} ft over the setting`);
+  R("Lineshaft", `${shaft[1]} in diameter, C1045 (416 stainless in corrosive water), 20 ft sections with matching couplings`, `Rated about ${fmt(shaftHp(shaft[0]))} hp at 1,770 rpm against ${fmt(bowlBhp)} hp needed at the bowls, with 10% margin`);
+  R("Shaft power loss", `${fmt(shaftLoss, 1)} hp over ${fmt(set)} ft; surface power ${fmt(surfaceBhp)} hp`, "Bearing drag along the enclosed lineshaft");
+  R("Lineshaft type and bearings", i.potable ? "Water-lubricated open lineshaft with rubber or thermoplastic bearings (no oil in a drinking-water well); or an oil-lubricated line using NSF H1 oil" : "Enclosed oil-lubricated lineshaft, bronze bearings every 5 ft, 3-1/2 in Sch 80 tubing", i.potable ? "Drinking-water use" : "Standard mine-supply practice");
+  R("Discharge head", `${dis[0]} in flanged head with non-reverse ratchet, pressure tap and pre-lube connection; base plate anchored to an 18 in pedestal`, "Sized to the column and discharge line");
+  R("Thrust", `Driver thrust bearing rated above about ${fmt(thrustLb)} lb (confirm with the pump curve's down-thrust at shutoff)`, `Hydraulic thrust allowance plus ${fmt(12.8 * set)} lb of shaft weight`);
+  if (diesel){
+    const engHp = Math.ceil(surfaceBhp * 1.15 / 25) * 25;
+    R("Driver", `Diesel engine, ${fmt(engHp)} hp continuous at 1,800 rpm, EPA Tier 4 Final, renewable-diesel capable, derated for ${fmt(elev)} ft elevation and ${fmt(amb)} \u00b0C ambient`, `Surface power ${fmt(surfaceBhp)} hp plus 15% margin; site derating typically 3% per 1,000 ft above 500 ft`);
+    R("Gear drive", `Right-angle drive, vertical hollow shaft, 1:1, rated ${fmt(gearHp)} hp at 1,800 rpm, non-reverse ratchet matched to rotation, thrust capacity above ${fmt(thrustLb)} lb`, "1.5 service factor on surface power");
+    R("Cooling", "Closed-loop radiator sized for full-load heat rejection at the site ambient. Use a well-water heat exchanger only if a radiator cannot be fitted, and then specify a removable bundle with 90/10 copper-nickel or titanium tubes and anodes", "Manual 7.5: heat exchangers divert and warm pumped water and foul in scaling water");
+    R("Engine oil", "SAE 15W-40 CH-4 or later, changed every 250 h or 6 months, with oil analysis each change", "Typical for this engine class");
+    R("Gear oil", "AGMA extreme-pressure gear oil per the drive manual (commonly ISO 220 class); first change at 500 h, then yearly or 2,500 h", "1997 Amarillo practice");
+    R("Fuel", `Double-wall tank with 72 h capacity (about ${fmt(surfaceBhp * 0.055 * 72)} gal at ${fmt(surfaceBhp * 0.055, 1)} gal/h), secondary containment, water separator`, "Remote-site standby");
+  } else {
+    R("Driver", `Vertical hollow-shaft motor, ${fmt(motorHp)} hp, 1,800 rpm, NEMA Premium or IE4, inverter duty, non-reverse ratchet, winding and bearing RTDs, space heater, thrust rating above ${fmt(thrustLb)} lb`, `Surface power ${fmt(surfaceBhp)} hp plus 10%`);
+    R("Motor enclosure", `${amb >= 45 ? "WPI with filters or TEFC" : "TEFC"}, rated for ${fmt(amb)} \u00b0C ambient at ${fmt(elev)} ft; class F insulation with class B rise`, "Desert site derating");
+    R("Drive", `Variable frequency drive, ${fmt(Math.ceil(kw / 5) * 5)} kW class, 18-pulse or active front end, harmonic distortion under 5% (IEEE 519), output dv/dt filter, bypass contactor, 30 s ramps`, `Draw about ${fmt(kw)} kW (${fmt(amps)} A at 480 V)`);
+    R("Motor lubrication", "Grease-lubricated thrust bearing per the maker (typically polyurea NLGI 2), or oil-lubricated angular-contact bearings on large motors; regrease at the interval on the nameplate", "Motor maintenance");
+  }
+  if (i.power === "grid" || hybrid) R("Supply", `Service transformer about ${fmt(kva)} kVA, 480 V three-phase; feeder sized for ${fmt(amps * 1.25)} A continuous; surge protection at the service`, `Motor draw ${fmt(amps)} A plus 25%`);
+  if (hybrid) R("Solar and storage", `PV array about ${fmt(pvKw)} kW (single-axis tracker) to carry the pump through sun hours, or about ${fmt(pvOffset)} kW to offset all yearly energy; battery ${fmt(battShut)} kWh for a controlled shutdown or ${fmt(battRide)} kWh for 2 h ride-through and peak shaving; hybrid inverter and controller`, `Running load ${fmt(kw)} kW; yearly energy ${fmt(kwh)} kWh at 5.5 peak sun hours a day`);
+  if (i.power !== "none") R("Standby generator", `${fmt(genKw)} kW prime-rated, Tier 4 Final, automatic transfer switch, 72 h fuel`, "1.3 × running load for VFD and starting duty");
+  R("Flow meter", `Full-bore magnetic meter, ${meter[0]} in line size, accuracy \u00b10.5% of reading, 4\u201320 mA and pulse outputs, local totalizer, IP68 sensor; 5 diameters straight upstream, 3 downstream`, `Velocity ${fmt(meterV, 1)} ft/s (target 2\u201312). A propeller meter to AWWA C704 (about \u00b12%) is the mechanical alternative`);
+  R("Wellhead valves", `Silent check valve ${dis[0]} in; combination air valve; isolation butterfly valve; sample tap; full-rate pump-to-waste line`, "Manual 7.4");
+  R("Instruments", "Vented pressure transducer in a 1 in 316L tube (15 min logging), discharge pressure transmitter, power meter, vibration and bearing temperature to SCADA", "Manual 5.6, 8.1");
+  R("Lineshaft oil", i.potable ? `NSF H1 food-grade ISO 32 turbine oil, about ${fmt(tubeOil, 1)} gal to fill the tube` : `ISO 32 turbine oil with rust and oxidation inhibitors (145\u2013175 SUS at 100 \u00b0F, VI 90 min), about ${fmt(tubeOil, 1)} gal to fill the tube`, `0.148 gal per ft of ${fmt(set)} ft setting`);
+  R("Scaling and corrosion allowance", cls ? `${cls === "Low" ? "Standard materials; review every 5 years" : cls === "Very high" ? "Duplex or FRP wetted parts; yearly casing video; plan acid rehabilitation every 3 years" : "316L wetted parts below static level; plan rehabilitation every 3\u20135 years"}${isNum(i.si) && i.si > 1 ? "; strong carbonate scaling expected, keep steady VFD pumping" : ""}` : "Sample the water and rerun this before ordering", cls ? `Larson-Skold ${fmt(chem.lsi, 2)}` : "");
+  const flags = [];
+  if (colV > 9) flags.push(["warn", `Column velocity ${fmt(colV, 1)} ft/s is above the 9 ft/s guide even at ${col[0]} in; check the largest column the casing will take.`]);
+  flags.push(["", `Column size is set by velocity and friction; the pump chamber casing must be at least two nominal sizes above the bowls, so check the recommended column against the casing actually in the well.`]);
+  if (shaftHp(shaft[0]) < surfaceBhp) flags.push(["bad", "Shaft power at the surface exceeds the selected shaft rating; use the next size or a shorter setting."]);
+  if (colHead > 0.1 * tdh) flags.push(["warn", `Column friction is about ${fmt(colHead)} ft, over 10% of the head. A larger column would pay for itself in energy.`]);
+  if (diesel && i.potable) flags.push(["warn", "Drinking-water well with a diesel drive: keep fuel and oil in containment away from the wellhead and use food-grade lineshaft oil."]);
+  if (!chem) flags.push(["warn", "No water chemistry entered, so materials are generic. Run the Corrosion and scaling calculator first."]);
+  flags.push(["", `Energy at ${fmt(hours)} h/yr: about ${fmt(kwh)} kWh (${fmt(1.024 * tdh / (eff * 0.95 * 0.97))} kWh per acre-foot).`]);
+  return {rows, flags, meta: {q, tdh, set, surfaceBhp, motorHp, kw, kwh, col, shaft, meter, cls, diesel, hybrid}};
+}
+function specHtml(i, r){
+  return `<div class="rep">
+  <p><strong>Duty:</strong> ${fmt(i.q)} gpm at ${fmt(i.tdh)} ft \u00b7 setting ${fmt(r.meta.set)} ft \u00b7 ${r.meta.diesel ? "diesel drive" : "electric drive"}${r.meta.hybrid ? " with solar and battery" : ""} \u00b7 water class ${esc(r.meta.cls || "not entered")}</p>
+  <div class="results">
+    <div class="res"><div class="k">Surface power</div><div class="v">${fmt(r.meta.surfaceBhp)}<small>hp</small></div></div>
+    <div class="res"><div class="k">${r.meta.diesel ? "Engine" : "Motor"}</div><div class="v">${fmt(r.meta.diesel ? Math.ceil(r.meta.surfaceBhp * 1.15 / 25) * 25 : r.meta.motorHp)}<small>hp</small></div></div>
+    <div class="res"><div class="k">Column</div><div class="v">${r.meta.col[0]}<small>in</small></div></div>
+    <div class="res"><div class="k">Lineshaft</div><div class="v" style="font-size:1.2rem">${r.meta.shaft[1]}<small>in</small></div></div>
+    <div class="res"><div class="k">Flow meter</div><div class="v">${r.meta.meter[0]}<small>in</small></div></div>
+    <div class="res"><div class="k">Electrical draw</div><div class="v">${fmt(r.meta.kw)}<small>kW</small></div></div>
+  </div>
+  <h3>Recommended package</h3>
+  <div class="tbl-wrap"><table><thead><tr><th>Item</th><th>Specification</th><th>Basis</th></tr></thead><tbody>
+  ${r.rows.map(x => `<tr><td><strong>${esc(x.item)}</strong></td><td>${esc(x.spec)}</td><td class="src">${esc(x.why)}</td></tr>`).join("")}
+  </tbody></table></div>
+  <h3>Checks</h3><ul class="notes">${r.flags.map(([c, t]) => `<li class="${c}">${esc(t)}</li>`).join("")}</ul>
+  <p class="src">Screening selection from the Resilient Well Manual and the 1997 equipment records: shaft ratings about 24.8 \u00d7 diameter\u00b3 hp at 1,770 rpm, column velocity kept under 7 ft/s, friction by Hazen-Williams (C = 120), motor and VFD efficiency 95% and 97%. Confirm every item with the pump curve and the supplier before ordering.</p></div>`;
+}
+function runSpec(){
+  const i = specInputs();
+  if (!isNum(i.q) || i.q <= 0 || !isNum(i.tdh) || i.tdh <= 0){ $("sp_msg").textContent = "Enter a design rate and total head above zero."; return null; }
+  const r = specifyEquipment(i);
+  $("sp_out").innerHTML = specHtml(i, r);
+  $("sp_msg").textContent = "";
+  return {title: `Equipment selection: ${i.well || fmt(i.q) + " gpm at " + fmt(i.tdh) + " ft"}`, html: specHtml(i, r)};
+}
+function setupSpec(){
+  const fill = () => {
+    const w = getWell($("sp_well").value); if (!w) return;
+    const dp = designInputs(w), d = computeDesign(dp.p);
+    $("sp_q").value = isNum(w.q) ? w.q : Math.round(dp.p.q);
+    $("sp_tdh").value = isNum(w.tdh) ? w.tdh : Math.round(d.tdh);
+    $("sp_set").value = isNum(w.set) ? w.set : Math.round(d.set);
+    if (hasChem(w)){ $("sp_cl").value = w.cl; $("sp_so4").value = w.so4; $("sp_hco3").value = w.hco3; $("sp_si").value = isNum(w.si) ? w.si : ""; }
+    if (isNum(w.hours)) $("sp_hours").value = w.hours;
+    if (isNum(w.elev) || isNum(w.mp)) $("sp_elev").value = Math.round(isNum(w.elev) ? w.elev : w.mp);
+    runSpec();
+  };
+  $("sp_well").addEventListener("change", fill);
+  $("sp_go").addEventListener("click", runSpec);
+  $("sp_dl").addEventListener("click", () => { const r = runSpec(); if (r) saveFile(`${fileSafe(r.title)}.html`, docWrap(r.title, r.html, {kind: "Equipment selection"}), "text/html"); });
+  $("sp_add").addEventListener("click", () => { const r = runSpec(); if (r) addReportItem(r.title, "Equipment selection", r.html); });
+}
+
 /* ---------------- equipment and parts ---------------- */
 const EQUIP = {
   "MS-3":  {eng: "Cat 3406C DITA", engSn: "6TB16898", hp: 325, pump: "Floway 14 DKH, 6 stages", pumpSn: "25671-5-1", gear: "Amarillo S-500-A VHS, 500 hp, 1:1", gearSn: "209594", hx: "Corona Free-Flow 18-160-18, 12 in", hxSn: "1301", meter: "McCrometer MW500, 12 in", col: 12.75, wall: 0.375, head: 12, shaftLen: 452, tubes: 90, brgs: 91},
@@ -2994,7 +3155,7 @@ function renderTrouble(){
   $("lg_well").addEventListener("change",()=>{ const b=BASES[$("lg_well").value]; $("lg_base").value = b ?? ""; });
   $("ck_add").addEventListener("click",addJob);
   LOGS=[]; renderLogs(); renderJobs();
-  setupSearch(); setupData(); setupWellsUi(); setupExplore(); setupReports(); addCalcButtons(); setupMaintain(); setupEquip();
+  setupSearch(); setupData(); setupWellsUi(); setupExplore(); setupReports(); addCalcButtons(); setupMaintain(); setupEquip(); setupSpec();
   $("dt_import_lbl").addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); $("dt_import").click(); } });
   startLocal();
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>calcAll());
