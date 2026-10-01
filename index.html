@@ -1323,12 +1323,12 @@ const WELL_FIELDS = [
 ];
 const FIELD_INFO = {}; WELL_FIELDS.forEach(([, fs]) => fs.forEach(f => FIELD_INFO[f[0]] = f));
 const DEFAULTS = {q: 2000, sc: 25, dec: 50, sub: 40, dia: 16, open: 15, psi: 30, fr: 1.5, eff: 78, elev: 4500, npshr: 25, hours: 4000, swl: 250};
-let CUSTOM = [], EDITS = {};
+let CUSTOM = [], EDITS = {}, DELETED = [];
 
 const isNum = v => typeof v === "number" && Number.isFinite(v);
 const blank = v => v === undefined || v === null || v === "";
 function WELLS(){
-  const base = BASE_WELLS.map(b => {
+  const base = BASE_WELLS.filter(b => !DELETED.includes(b.id)).map(b => {
     const e = EDITS[b.id];
     if (!e) return Object.assign({_src: "base"}, b);
     const w = Object.assign({}, b);
@@ -1409,7 +1409,10 @@ function statusTags(w){
 let WELL_CAP = 100000;
 function renderWells(){
   const q = $("w_search").value.toLowerCase(), area = $("w_area").value;
+  const q0 = $("w_search").value.toLowerCase();
+  if ($("w_area").value === "deleted"){ renderDeleted(q0); return; }
   const list = WELLS().filter(w => {
+    if (area === "deleted") return false;
     if (area === "custom" && w._src !== "custom") return false;
     if (area === "edited" && w._src !== "edited") return false;
     if (area && area !== "custom" && area !== "edited" && w.area !== area) return false;
@@ -1431,8 +1434,18 @@ function renderWells(){
   const areas = [...new Set(WELLS().map(w => w.area).filter(Boolean))];
   $("w_areas").innerHTML = areas.map(a => `<option value="${esc(a)}">`).join("");
   const cur = $("w_area").value;
-  $("w_area").innerHTML = `<option value="">All wells</option>` + areas.map(a => `<option>${esc(a)}</option>`).join("") + `<option value="custom">Custom wells</option><option value="edited">Edited wells</option>`;
+  $("w_area").innerHTML = `<option value="">All wells</option>` + areas.map(a => `<option>${esc(a)}</option>`).join("") + `<option value="custom">Custom wells</option><option value="edited">Edited wells</option><option value="deleted">Deleted wells (${DELETED.length})</option>`;
   $("w_area").value = [...$("w_area").options].some(o => o.value === cur) ? cur : "";
+}
+function renderDeleted(q){
+  const list = BASE_WELLS.filter(b => DELETED.includes(b.id) && (!q || (b.id + " " + (b.area || "")).toLowerCase().includes(q)));
+  $("w_count").textContent = list.length ? `${list.length} deleted well${list.length === 1 ? "" : "s"} \u2014 select Restore to bring one back` : "No deleted wells.";
+  $("w_grid").innerHTML = list.map(b => `<div class="well-card" style="cursor:default"><span class="id">${esc(b.id)}</span><span class="meta">${esc([b.area, KIND_LABEL[b.kind]].filter(Boolean).join(" \u00b7 "))}</span><span class="row"><span class="pill n">Deleted</span><button class="btn ghost" style="padding:4px 10px" data-restore="${esc(b.id)}">Restore</button></span></div>`).join("") || `<div class="empty">Nothing deleted.</div>`;
+  $("w_grid").querySelectorAll("[data-restore]").forEach(b => b.onclick = () => restoreWell(b.dataset.restore));
+  const areas = [...new Set(WELLS().map(w => w.area).filter(Boolean))];
+  const cur = $("w_area").value;
+  $("w_area").innerHTML = `<option value="">All wells</option>` + areas.map(a => `<option>${esc(a)}</option>`).join("") + `<option value="custom">Custom wells</option><option value="edited">Edited wells</option><option value="deleted">Deleted wells (${DELETED.length})</option>`;
+  $("w_area").value = cur;
 }
 function refreshWellLists(){
   const ws = WELLS();
@@ -1474,11 +1487,12 @@ function openWell(id){
   h += `<h3>Latest readings</h3>`;
   const logs = LOGS.filter(r => r.well === id).slice(0, 5);
   h += logs.length ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th class="num">Sc</th><th>Status</th></tr></thead><tbody>${logs.map(r => { const s = rowStatus(r); return `<tr><td>${esc(r.date)}</td><td class="num">${fmt(r.sc, 1)}</td><td><span class="pill ${s[0]}">${s[1]}</span></td></tr>`; }).join("")}</tbody></table></div>` : `<div class="src">No readings logged yet.</div>`;
-  h += `<div class="row"><button class="btn" id="wd_report">Design report</button><button class="btn ghost" id="wd_edit">Edit well</button><button class="btn ghost" id="wd_calc">Open in calculators</button><button class="btn ghost" id="wd_maint">Maintenance</button><button class="btn ghost" id="wd_log">Log a reading</button></div>`;
+  h += `<div class="row"><button class="btn" id="wd_report">Design report</button><button class="btn ghost" id="wd_edit">Edit well</button><button class="btn ghost" id="wd_calc">Open in calculators</button><button class="btn ghost" id="wd_maint">Maintenance</button><button class="btn ghost" id="wd_del" style="color:var(--bad);border-color:var(--bad)">Delete</button><button class="btn ghost" id="wd_log">Log a reading</button></div>`;
   $("wd_body").innerHTML = h;
   $("wd_report").onclick = () => { $("wellDlg").close(); openReport(id); };
   $("wd_edit").onclick = () => { $("wellDlg").close(); openEditor(id); };
   $("wd_calc").onclick = () => { $("wellDlg").close(); loadIntoCalculators(w); };
+  $("wd_del").onclick = () => { EDIT_ID = id; $("wellDlg").close(); deleteWell(); };
   $("wd_maint").onclick = () => { $("wellDlg").close(); go("maintain"); $("mt_well").value = id; renderMaintain(); };
   $("wd_log").onclick = () => { $("wellDlg").close(); go("log"); $("lg_well").value = id; $("lg_well").dispatchEvent(new Event("change")); $("lg_q").focus(); };
   $("wellDlg").showModal();
@@ -1534,7 +1548,8 @@ function openEditor(id){
     : "Update any value. The Well ID of a custom well can't be changed.";
   $("ed_form").innerHTML = WELL_FIELDS.map(([g, fs]) => `<fieldset style="border:0;padding:0;margin:0"><h3 style="margin-bottom:8px">${esc(g)}</h3><div class="fields">${fs.map(f => fieldInput(f, w[f[0]], base ? {v: base[f[0]]} : undefined, f[0] === "id" && !!id)).join("")}</div></fieldset>`).join("");
   $("ed_reset").hidden = !(base && EDITS[id]);
-  $("ed_delete").hidden = !(id && !base);
+  $("ed_delete").hidden = !id;
+  $("ed_delete").textContent = base ? "Delete well (can be restored)" : "Delete well";
   $("ed_msg").textContent = "";
   $("editDlg").showModal();
   if (!id) $("ef_id").focus();
@@ -1593,10 +1608,20 @@ function resetEditor(){
   delete EDITS[EDIT_ID]; const id = EDIT_ID;
   $("editDlg").close(); wellsChanged(); openWell(id);
 }
-function deleteCustom(){
-  if (!confirm(`Delete the custom well ${EDIT_ID}? Its log readings stay in the log.`)) return;
-  CUSTOM = CUSTOM.filter(c => c.id !== EDIT_ID);
-  $("editDlg").close(); wellsChanged();
+function deleteWell(){
+  const base = BASE_WELLS.find(b => b.id === EDIT_ID);
+  const msg = base
+    ? `Delete ${EDIT_ID} from this device? It disappears from every list, but readings, jobs and maintenance records stay, and you can restore it from Show \u2192 Deleted wells.`
+    : `Delete the well ${EDIT_ID}? This cannot be undone. Its log readings stay in the log.`;
+  if (!confirm(msg)) return;
+  if (base){ if (!DELETED.includes(EDIT_ID)) DELETED.push(EDIT_ID); delete EDITS[EDIT_ID]; }
+  else CUSTOM = CUSTOM.filter(c => c.id !== EDIT_ID);
+  const id = EDIT_ID;
+  $("editDlg").close(); wellsChanged(); toast(`${id} deleted.`);
+}
+function restoreWell(id){
+  DELETED = DELETED.filter(x => x !== id);
+  wellsChanged(); toast(`${id} restored.`);
 }
 
 /* design report */
@@ -1721,7 +1746,7 @@ function setupWellsUi(){
   $("ed_save").addEventListener("click", saveEditor);
   $("ed_cancel").addEventListener("click", () => $("editDlg").close());
   $("ed_reset").addEventListener("click", resetEditor);
-  $("ed_delete").addEventListener("click", deleteCustom);
+  $("ed_delete").addEventListener("click", deleteWell);
   $("rp_download").addEventListener("click", () => saveFile(`design_report_${REPORT_ID.replace(/[^A-Za-z0-9._-]/g, "_")}.html`, reportDocument(REPORT_ID), "text/html"));
   $("rp_print").addEventListener("click", () => printDoc(reportDocument(REPORT_ID)));
   $("rp_addproj").addEventListener("click", () => addReportItem(`Design report: ${REPORT_ID}`, "Well design report", reportHtml(getWell(REPORT_ID))));
@@ -1753,7 +1778,7 @@ function rowStatus(r){
   return healthStatus((r.sc/b-1)*100);
 }
 function localSave(){
-  const ok = [store.set("wt_maint",MAINT), store.set("wt_custom_wells",CUSTOM), store.set("wt_well_edits",EDITS), store.set("wt_logs",LOGS), store.set("wt_bases",BASES), store.set("wt_base_at",BASE_AT), store.set("wt_jobs",JOBS)].every(Boolean);
+  const ok = [store.set("wt_deleted_wells",DELETED), store.set("wt_maint",MAINT), store.set("wt_custom_wells",CUSTOM), store.set("wt_well_edits",EDITS), store.set("wt_logs",LOGS), store.set("wt_bases",BASES), store.set("wt_base_at",BASE_AT), store.set("wt_jobs",JOBS)].every(Boolean);
   if (!ok){ ["lg_banner","ck_banner"].forEach(i=>{ $(i).hidden=false; $(i).textContent="This browser couldn't save the last change (storage full or blocked). Download a backup from the Data page, then clear old entries."; }); }
   renderStats();
 }
@@ -1916,7 +1941,7 @@ function saveFile(filename, text, type){
 }
 function startLocal(){
   LOCAL = true;
-  LOGS = store.get("wt_logs", []); BASES = store.get("wt_bases", {}); BASE_AT = store.get("wt_base_at", {}); JOBS = store.get("wt_jobs", []); CUSTOM = store.get("wt_custom_wells", []); EDITS = store.get("wt_well_edits", {}); MAINT = store.get("wt_maint", []);
+  LOGS = store.get("wt_logs", []); BASES = store.get("wt_bases", {}); BASE_AT = store.get("wt_base_at", {}); JOBS = store.get("wt_jobs", []); CUSTOM = store.get("wt_custom_wells", []); EDITS = store.get("wt_well_edits", {}); DELETED = store.get("wt_deleted_wells", []); MAINT = store.get("wt_maint", []);
   LOGS.sort((a, b) => a.date < b.date ? 1 : -1);
   ["lg_banner", "ck_banner"].forEach(i => $(i).hidden = true);
   updateWho(); renderWells(); refreshWellLists(); renderLogs(); renderJobs(); renderStats();
@@ -1929,12 +1954,13 @@ function renderStats(){
   if (!$("dt_stats")) return;
   const wells = new Set(LOGS.map(r => r.well)).size;
   let bytes = 0;
-  try { ["wt_logs", "wt_bases", "wt_jobs", "wt_custom_wells", "wt_well_edits", "wt_maint"].forEach(k => bytes += (localStorage.getItem(k) || "").length); } catch (e) {}
+  try { ["wt_logs", "wt_bases", "wt_jobs", "wt_custom_wells", "wt_well_edits", "wt_maint", "wt_deleted_wells"].forEach(k => bytes += (localStorage.getItem(k) || "").length); } catch (e) {}
   results($("dt_stats"), [
     ["Readings", fmt(LOGS.length), ""], ["Wells with readings", fmt(wells), ""],
     ["Baselines", fmt(Object.keys(BASES).length), ""], ["Jobs", fmt(JOBS.length), ""],
     ["Custom wells", fmt(CUSTOM.length), ""], ["Edited wells", fmt(Object.keys(EDITS).length), ""],
     ["Maintenance records", fmt(MAINT.length), ""],
+    ["Deleted wells", fmt(DELETED.length), ""],
     ["Space used", fmt(bytes / 1024, 0), "KB of ~5,000"]
   ]);
 }
@@ -1947,7 +1973,7 @@ function setupData(){
   });
   $("dt_export").addEventListener("click", () => {
     const payload = {app: "morenci-well-toolkit", version: 1, exported: new Date().toISOString(), exportedBy: MYNAME(),
-      logs: LOGS, baselines: BASES, baselineDates: BASE_AT, jobs: JOBS, customWells: CUSTOM, wellEdits: EDITS, maintenance: MAINT};
+      logs: LOGS, baselines: BASES, baselineDates: BASE_AT, jobs: JOBS, customWells: CUSTOM, wellEdits: EDITS, maintenance: MAINT, deletedWells: DELETED};
     saveFile(`well_toolkit_backup_${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify(payload, null, 1), "application/json");
     $("dt_msg").textContent = `Backup downloaded: ${LOGS.length} readings, ${Object.keys(BASES).length} baselines, ${JOBS.length} jobs, ${CUSTOM.length} custom wells, ${Object.keys(EDITS).length} edited wells, ${MAINT.length} maintenance records.`;
   });
@@ -1963,13 +1989,14 @@ function setupData(){
   });
   $("dt_clear").addEventListener("click", () => {
     if (!confirm("Delete every reading, baseline, job, custom well, well edit and maintenance record stored in this browser? This can't be undone.")) return;
-    LOGS = []; BASES = {}; BASE_AT = {}; JOBS = []; CUSTOM = []; EDITS = {}; MAINT = []; CURRENT_JOB = null;
+    LOGS = []; BASES = {}; BASE_AT = {}; JOBS = []; CUSTOM = []; EDITS = {}; MAINT = []; DELETED = []; CURRENT_JOB = null;
     wellsChanged(); renderJobs(); renderMaintain();
     $("dt_msg").textContent = "All data cleared from this browser.";
   });
 }
 function mergeBackup(d){
   const res = {logs: 0, bases: 0, jobs: 0, jobsMerged: 0, wells: 0, maint: 0};
+  (Array.isArray(d.deletedWells) ? d.deletedWells : []).forEach(id => { if (typeof id === "string" && !DELETED.includes(id) && BASE_WELLS.some(b => b.id === id)) DELETED.push(id); });
   const haveM = new Set(MAINT.map(m => m.id));
   (Array.isArray(d.maintenance) ? d.maintenance : []).forEach(m => {
     if (!m || !m.id || haveM.has(m.id) || typeof m.well !== "string") return;
