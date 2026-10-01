@@ -1406,6 +1406,7 @@ function statusTags(w){
   if (w._src === "edited") t.push(["n", "Edited"]);
   return t;
 }
+let WELL_CAP = 100000;
 function renderWells(){
   const q = $("w_search").value.toLowerCase(), area = $("w_area").value;
   const list = WELLS().filter(w => {
@@ -1415,14 +1416,18 @@ function renderWells(){
     const hay = [w.id, w.area, w.geo, w.cond, w.constr, w.type, w.note, w.group, w.loc, KIND_LABEL[w.kind]].join(" ").toLowerCase();
     return !q || hay.includes(q);
   });
-  const shown = list.slice(0, 80);
-  $("w_count").textContent = list.length > shown.length ? `Showing ${shown.length} of ${list.length} wells — search or filter to narrow` : `${list.length} well${list.length === 1 ? "" : "s"}`;
+  const cap = WELL_CAP;
+  const shown = list.slice(0, cap);
+  $("w_count").innerHTML = list.length > shown.length
+    ? `Showing ${shown.length} of ${list.length} wells <button class="btn ghost" id="w_more" style="padding:2px 10px;margin-left:8px">Show all ${list.length}</button>`
+    : `${list.length} well${list.length === 1 ? "" : "s"}`;
   $("w_grid").innerHTML = shown.map(w => {
     const fact = isNum(w.q) && isNum(w.tdh) ? `${fmt(w.q)} gpm at ${fmt(w.tdh)} ft` : isNum(w.q) ? `${fmt(w.q)} gpm` : (w.type && w.type !== "—" ? w.type : "");
     const line = w.cond || w.note || (w.date ? "Sampled " + w.date : "");
     return `<button class="well-card" data-w="${esc(w.id)}"><span class="id">${esc(w.id)}</span><span class="meta">${esc([w.area, KIND_LABEL[w.kind], fact].filter(Boolean).join(" · "))}</span><span class="row" style="gap:6px">${statusTags(w).map(([c, l]) => `<span class="pill ${c}">${esc(l)}</span>`).join("")}</span><span class="meta">${esc(line)}</span></button>`;
   }).join("") || `<div class="empty">No wells match. Try another word, or add a well.</div>`;
   $("w_grid").querySelectorAll("[data-w]").forEach(b => b.addEventListener("click", () => openWell(b.dataset.w)));
+  if ($("w_more")) $("w_more").onclick = () => { WELL_CAP = 1e6; renderWells(); };
   const areas = [...new Set(WELLS().map(w => w.area).filter(Boolean))];
   $("w_areas").innerHTML = areas.map(a => `<option value="${esc(a)}">`).join("");
   const cur = $("w_area").value;
