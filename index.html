@@ -419,9 +419,12 @@ mark{background:var(--warn-soft);color:inherit;padding:0 2px;border-radius:3px}
         <label class="f" style="flex:1;min-width:200px">Search<input type="search" id="w_search" placeholder="Well ID, geology, condition…"></label>
         <label class="f">Show<select id="w_area"><option value="">All wells</option></select></label>
         <button class="btn" id="w_add" style="align-self:flex-end">Add a well</button>
+        <button class="btn ghost" id="w_geo" style="align-self:flex-end">Update geology from coordinates</button>
+        <label class="check-inline" style="align-self:flex-end;padding-bottom:8px"><input type="checkbox" id="w_geo_over"> replace existing</label>
         <datalist id="w_areas"></datalist>
       </div>
-      <div class="src" id="w_count" style="margin-bottom:10px"></div>
+      <div class="src" id="w_count" style="margin-bottom:4px"></div>
+      <div class="src" id="w_geomsg" role="status" style="margin-bottom:10px"></div>
       <div class="row" hidden>
       </div>
       <div class="well-grid" id="w_grid"></div>
@@ -1397,7 +1400,8 @@ function packFor(d30, mult){
 function statusTags(w){
   const t = [];
   if (w.status && STATUS_LABEL[w.status]) t.push(STATUS_LABEL[w.status]);
-  if (hasChem(w)){ const l = lsiOf(w.cl, w.so4, w.hco3); t.push((l > 5 || w.cl > 500) ? ["bad", "Very high corrosion"] : l >= 0.8 ? ["warn", "Moderate to high corrosion"] : ["ok", "Low corrosion"]); }
+  const co = chemOf(w);
+  if (co){ const l = lsiOf(co.c.cl, co.c.so4, co.c.hco3); const lab = (l > 5 || co.c.cl > 500) ? ["bad", "Very high corrosion"] : l >= 0.8 ? ["warn", "Moderate to high corrosion"] : ["ok", "Low corrosion"]; t.push(co.est ? [lab[0], lab[1] + " (location)"] : lab); }
   if (w._src === "custom") t.push(["n", "Custom"]);
   if (w._src === "edited") t.push(["n", "Edited"]);
   return t;
@@ -1434,7 +1438,7 @@ function refreshWellLists(){
   keep("sp_well", `<option value="">Enter my own</option>` + opts);
   keep("ck_well", `<option value="">General / no well</option>` + opts);
   keep("lg_filter", `<option value="">All wells</option>` + opts);
-  keep("c_pick", `<option value="">Enter my own values</option>` + ws.filter(hasChem).map(w => `<option value="${esc(w.id)}">${esc(w.id)}${w.type && w.type !== "—" ? " (" + esc(w.type) + ")" : ""}</option>`).join(""));
+  keep("c_pick", `<option value="">Enter my own values</option>` + ws.map(w => `<option value="${esc(w.id)}">${esc(w.id)}${hasChem(w) ? "" : " \u2014 from location"}</option>`).join(""));
   keep("e_pick", `<option value="">Enter my own duty</option>` + ws.filter(w => isNum(w.q) && isNum(w.tdh)).map(w => `<option value="${esc(w.id)}">${esc(w.id)}: ${fmt(w.q)} gpm at ${fmt(w.tdh)} ft</option>`).join(""));
   const b = BASES[$("lg_well").value]; $("lg_base").value = b ?? "";
 }
@@ -1460,6 +1464,8 @@ function openWell(id){
   if (w._src === "edited") h += `<p class="src">Some values were changed on this device${w._updatedBy ? " by " + esc(w._updatedBy) : ""}${w._updatedAt ? " on " + esc(w._updatedAt.slice(0, 10)) : ""}. Edit the well to see or restore the originals.</p>`;
   h += rows.join("");
   if (w.area === "Morenci District" && w._src !== "custom") h += `<p class="src">Ion values for district boreholes were read from a log-scale chart (about ±15%). Use lab reports for final design.</p>`;
+  h += chemNote(w);
+  if (!w.geo){ const g = geoFromLocation(w); h += `<h3>Geology from location</h3><p>${esc(g.text)}</p><p class="src">${esc(g.src)}. Use <strong>Update geology from coordinates</strong> on the Wells page to pull the mapped unit, or edit the well to enter a logged profile.</p>`; }
   h += `<h3>Latest readings</h3>`;
   const logs = LOGS.filter(r => r.well === id).slice(0, 5);
   h += logs.length ? `<div class="tbl-wrap"><table><thead><tr><th>Date</th><th class="num">Sc</th><th>Status</th></tr></thead><tbody>${logs.map(r => { const s = rowStatus(r); return `<tr><td>${esc(r.date)}</td><td class="num">${fmt(r.sc, 1)}</td><td><span class="pill ${s[0]}">${s[1]}</span></td></tr>`; }).join("")}</tbody></table></div>` : `<div class="src">No readings logged yet.</div>`;
@@ -1592,7 +1598,9 @@ function deleteCustom(){
 function reportHtml(w){
   const {p, src} = designInputs(w);
   const d = computeDesign(p);
-  const chem = hasChem(w) ? computeChem(w) : null;
+  const co = chemOf(w);
+  const chem = co ? computeChem(co.c) : null;
+  const chemEst = co ? co.est : false;
   const pk = isNum(w.d30) ? packFor(w.d30, 5) : null;
   const e = energyCalc(p.q, isNum(w.tdh) ? w.tdh : d.tdh, p.hours, p.eff / 100, 4.0, 0.055, 0.09, 0.5, 0.05, 0.37);
   const assumed = Object.keys(src).filter(k => src[k] === "assumed default");
@@ -1606,7 +1614,8 @@ function reportHtml(w){
   const screenTop = isNum(p.scr) ? p.scr : Math.ceil((d.set + 40) / 10) * 10;
   const packTop = Math.max(60, screenTop - 30), bentTop = Math.max(50, packTop - 20);
   const flags = [...d.notes];
-  if (chem) flags.push(...chem.notes); else flags.push(["warn", "No complete water chemistry. Sample per manual Section 3.4 before choosing materials."]);
+  if (chem) flags.push(...chem.notes);
+  if (chemEst) flags.push(["warn", `Materials and scaling advice use chemistry from the well's location (${co.src}); sample this well before ordering casing or screen.`]);
   if (w.cond) flags.push([w.status === "bad" ? "bad" : w.status === "warn" ? "warn" : "", "Recorded condition: " + w.cond]);
   if (isNum(w.set) && isNum(p.scr) && w.set > p.scr) flags.push(["warn", `Recorded pump setting (${fmt(w.set)} ft) is below the top of the open interval (${fmt(p.scr)} ft); expect cascading water and air entrainment.`]);
   if (isNum(w.tdh) && Math.abs(w.tdh - d.tdh) / w.tdh > 0.15) flags.push(["warn", `Recorded design head (${fmt(w.tdh)} ft) differs from the calculated head (${fmt(d.tdh)} ft) by more than 15%; confirm levels and delivery pressure.`]);
@@ -1642,13 +1651,15 @@ ${k("npshr", "Pump NPSHr", fmt(p.npshr), "ft")}${k("hours", "Run hours", fmt(p.h
 <div class="res"><div class="k">Electrical draw</div><div class="v">${fmt(d.kw)}<small>kW</small></div></div>
 <div class="res"><div class="k">NPSH margin</div><div class="v">${fmt(d.ratio, 2)}</div></div>
 <div class="res"><div class="k">Pump-chamber ID</div><div class="v">${d.casing}<small>in min.</small></div></div>
-${chem ? `<div class="res"><div class="k">Larson-Skold index</div><div class="v">${fmt(chem.lsi, 2)}</div></div><div class="res"><div class="k">Materials class</div><div class="v" style="font-size:1.1rem">${esc(chem.cls)}</div></div>` : ""}
+${chem ? `<div class="res"><div class="k">Larson-Skold index${chemEst ? " (from location)" : ""}</div><div class="v">${fmt(chem.lsi, 2)}</div></div><div class="res"><div class="k">Materials class</div><div class="v" style="font-size:1.1rem">${esc(chem.cls)}</div></div>` : ""}
 ${pk ? `<div class="res"><div class="k">Filter pack</div><div class="v">${esc(pk.pick[0])}</div></div><div class="res"><div class="k">Starting slot</div><div class="v">${pk.slot.toFixed(3)}<small>in</small></div></div>` : ""}
 </div>
 ${isNum(w.tdh) || isNum(w.set) ? `<p class="src">Recorded pump data: ${isNum(w.tdh) ? "design head " + fmt(w.tdh) + " ft" : ""}${isNum(w.tdh) && isNum(w.set) ? ", " : ""}${isNum(w.set) ? "setting " + fmt(w.set) + " ft" : ""}${w.pump ? ", " + esc(w.pump) : ""}${w.engine ? ", " + esc(w.engine) : ""}.</p>` : ""}
 
 <h3>Construction drawing</h3>
 ${wellSchematicSvg({id: w.id, screenTop, Lr: d.Lr, packTop, bentTop, set: d.set, fpl: d.fpl, swl: p.swl, casing: d.casing, chamber: Math.max(d.set + 20, 60), dia: p.dia, motor: d.motor, bowl: d.bowl, slot: pk ? pk.slot.toFixed(3) + " in slot" : "slot per sieve analysis", sealShort: chem ? chem.seal.split(" ").slice(0, 2).join(" ") : "Type V cement", casingMatShort: chem ? (chem.cls === "Low" ? "steel" : chem.cls === "Very high" ? "duplex/316L" : "316L") : "316L", screenMatShort: chem ? chem.screen.split(" ")[0] : "316L", packShort: pk ? pk.pick[0] : "graded silica"})}
+
+${chemNote(w)}
 
 <h3>3. Checks and flags</h3>
 <ul class="notes">${flags.map(([c, t]) => `<li class="${c}">${esc(t)}</li>`).join("")}</ul>
@@ -1701,6 +1712,7 @@ function openReport(id){
 function reportDocument(id){ return docWrap(`Design report: ${id}`, reportHtml(getWell(id)), {kind: "Well design report"}); }
 function setupWellsUi(){
   $("w_add").addEventListener("click", () => openEditor(null));
+  $("w_geo").addEventListener("click", updateGeologyFromCoords);
   $("ed_save").addEventListener("click", saveEditor);
   $("ed_cancel").addEventListener("click", () => $("editDlg").close());
   $("ed_reset").addEventListener("click", resetEditor);
@@ -1711,8 +1723,9 @@ function setupWellsUi(){
   $("rp_edit").addEventListener("click", () => { $("repDlg").close(); openEditor(REPORT_ID); });
   $("rp_calc").addEventListener("click", () => { $("repDlg").close(); loadIntoCalculators(getWell(REPORT_ID)); });
   $("c_pick").addEventListener("change", e => {
-    const w = getWell(e.target.value); if (!w || !hasChem(w)) return;
-    $("c_cl").value = w.cl; $("c_so4").value = w.so4; $("c_hco3").value = w.hco3; $("c_si").value = isNum(w.si) ? w.si : ""; $("c_gyp").value = isNum(w.gyp) ? w.gyp : ""; calcChem();
+    const w = getWell(e.target.value); if (!w) return;
+    const co = chemOf(w); if (!co) return;
+    $("c_cl").value = co.c.cl; $("c_so4").value = co.c.so4; $("c_hco3").value = co.c.hco3; $("c_si").value = isNum(co.c.si) ? co.c.si : ""; $("c_gyp").value = isNum(co.c.gyp) ? co.c.gyp : ""; calcChem();
   });
   $("e_pick").addEventListener("change", e => { const w = getWell(e.target.value); if (!w || !isNum(w.q) || !isNum(w.tdh)) return; $("e_q").value = w.q; $("e_tdh").value = w.tdh; calcEnergy(); });
 }
@@ -2870,6 +2883,110 @@ function setupReports(){
   renderReports();
 }
 
+/* ---------------- chemistry and geology from location ---------------- */
+/* Zones follow the 2025 analyses (District_Wells_Water_Quality_Analyses, 31 Jul 2025) and the
+   borehole location map in that deck: a north-east group below the tailing facility, a central
+   cluster south of the tailing slope, and a west group on the ridge south-west of the pit. */
+const CHEM_ZONES = [
+  {id: "uec", label: "Upper Eagle Creek wells (BC-4, BC-10, BC-11, BC-15, sampled 2019)",
+   test: w => /Upper Eagle Creek/i.test(w.area || "") || (isNum(w.lat) && w.lat > 33.25),
+   c: {cl: 17, so4: 5, hco3: 165, si: 0.85, gyp: -3.17, dol: 1.77, type: "Ca-Mg-Na-HCO3"}},
+  {id: "ne", label: "north-east district borehole SW-114, below the tailing facility (SW-112 nearby is brackish at about 1,550 mg/L chloride, so sample before choosing materials)",
+   test: w => isNum(w.lat) && isNum(w.lon) && w.lat >= 33.045 && w.lon >= -109.34,
+   c: {cl: 130, so4: 830, hco3: 130, si: 0.95, gyp: -0.49, dol: 1.69, type: "Ca-Mg-SO4"}},
+  {id: "central", label: "central district boreholes SW-113, SW-121 and SW-123, south of the tailing slope",
+   test: w => isNum(w.lat) && isNum(w.lon) && w.lat >= 33.025 && w.lon >= -109.35,
+   c: {cl: 95, so4: 750, hco3: 165, si: 0.94, gyp: -0.66, dol: 1.76, type: "Ca-Mg-SO4"}},
+  {id: "west", label: "western district boreholes SW-108 to SW-111 and SW-115, south-west of the pit",
+   test: w => true,
+   c: {cl: 65, so4: 480, hco3: 120, si: 0.77, gyp: -0.98, dol: 1.62, type: "Ca-Mg-SO4"}}
+];
+const WV_CHEM = {cl: 130, so4: 250, hco3: 180, si: 0.09, gyp: -2.15, type: "Na-SO4-Cl-HCO3"};
+function chemZoneFor(w){
+  const z = CHEM_ZONES.find(z => { try { return z.test(w); } catch (e) { return false; } }) || CHEM_ZONES[CHEM_ZONES.length - 1];
+  return {c: z.c, label: z.label, zone: z.id};
+}
+function chemOf(w){
+  if (hasChem(w)) return {c: {cl: w.cl, so4: w.so4, hco3: w.hco3, si: w.si, gyp: w.gyp}, est: false, src: "water analysis recorded for this well"};
+  const near = (isNum(w.lat) && isNum(w.lon)) ? WELLS().filter(o => o.id !== w.id && hasChem(o) && isNum(o.lat) && isNum(o.lon))
+    .map(o => ({w: o, km: haversineKm([w.lat, w.lon], [o.lat, o.lon])})).sort((a, b) => a.km - b.km)[0] : null;
+  if (near && near.km <= 5) return {c: {cl: near.w.cl, so4: near.w.so4, hco3: near.w.hco3, si: near.w.si, gyp: near.w.gyp}, est: true,
+    src: `analysis at ${near.w.id}, ${fmt(near.km, 1)} km away`};
+  const z = chemZoneFor(w);
+  return {c: z.c, est: true, src: `2025 district analyses \u2014 ${z.label}`};
+}
+function chemNote(w){
+  const co = chemOf(w);
+  if (!co.est) return "";
+  const r = computeChem(co.c);
+  return `<h3>Water chemistry from location</h3><p class="src">No analysis is recorded for this well, so the values below come from the ${esc(co.src)}. They drive the materials, scaling and maintenance advice until the well is sampled.</p>
+  <div class="tbl-wrap"><table><tbody>
+  <tr><td>Water type</td><td>${esc(co.c.type || "\u2014")}</td></tr>
+  <tr><td>Chloride / sulfate / bicarbonate</td><td>${fmt(co.c.cl)} / ${fmt(co.c.so4)} / ${fmt(co.c.hco3)} mg/L</td></tr>
+  <tr><td>Calcite SI / gypsum SI</td><td>${isNum(co.c.si) ? co.c.si : "\u2014"} / ${isNum(co.c.gyp) ? co.c.gyp : "\u2014"}</td></tr>
+  <tr><td>Larson-Skold index</td><td>${fmt(r.lsi, 2)} \u2014 <span class="pill ${r.risk[0]}">${esc(r.risk[1])} corrosion risk</span></td></tr>
+  <tr><td>Materials class</td><td>${esc(r.cls)}: ${esc(r.mat)}</td></tr>
+  </tbody></table></div>`;
+}
+/* geology from coordinates */
+const GEO_FALLBACK = [
+  {test: w => /Upper Eagle Creek/i.test(w.area || "") || (isNum(w.lat) && w.lat > 33.25),
+   text: "Alluvium over basin-fill conglomerate to about 620 ft, volcanic rock below (Upper Eagle Creek pattern)"},
+  {test: w => isNum(w.lat) && w.lat >= 33.04,
+   text: "Mine-district ground: fill or alluvium at surface over altered and mineralized rock (Morenci district pattern)"},
+  {test: w => true,
+   text: "Basin-fill conglomerate over volcanic rock (Morenci district pattern)"}
+];
+function geoFromLocation(w){
+  const n = (isNum(w.lat) && isNum(w.lon)) ? WELLS().filter(o => o.id !== w.id && o.geo && o.geo.length > 10 && isNum(o.lat) && isNum(o.lon))
+    .map(o => ({w: o, km: haversineKm([w.lat, w.lon], [o.lat, o.lon])})).sort((a, b) => a.km - b.km)[0] : null;
+  if (n && n.km <= 3) return {text: n.w.geo, src: `geology logged at ${n.w.id}, ${fmt(n.km, 1)} km away`};
+  const f = GEO_FALLBACK.find(f => f.test(w));
+  return {text: f.text, src: "typical profile for this part of the district (manual Sections 2 and 3)"};
+}
+async function lookupGeologyFor(w){
+  if (!isNum(w.lat) || !isNum(w.lon)) return null;
+  const j = await fetchJson(`https://macrostrat.org/api/v2/mobile/map_query?lat=${w.lat}&lng=${w.lon}&z=12`, 15000);
+  const b = j && j.success && j.success.data && j.success.data.burwell && j.success.data.burwell[0];
+  if (!b) return null;
+  const cls = classifyGeology([b.name, b.lith, b.descrip].join(" "));
+  const aq = {basin: "Basin-fill conglomerate", alluvium: "Alluvium", volcanic: "Volcanic rock", crystalline: "Crystalline rock", sedimentary: "Sedimentary rock", mineralized: "Altered and mineralized rock"}[cls] || "";
+  const text = `${b.name || "Mapped unit"}${b.b_int_name ? ` (${b.b_int_name})` : ""}: ${String(b.lith || "").slice(0, 160)}`;
+  return {geo: text, aquifer: aq, cls};
+}
+async function updateGeologyFromCoords(){
+  const btn = $("w_geo"), msg = $("w_geomsg");
+  const wells = WELLS().filter(w => isNum(w.lat) && isNum(w.lon) && (!w.geo || $("w_geo_over").checked));
+  if (!wells.length){ msg.textContent = "Every well with coordinates already has geology. Tick 'replace existing' to look them up again."; return; }
+  if (navigator.onLine === false){ msg.textContent = "No connection, so mapped geology can't be looked up. The app still uses the location-based profile in reports."; return; }
+  btn.disabled = true;
+  let done = 0, failed = 0;
+  const now = new Date().toISOString(), by = MYNAME();
+  for (let i = 0; i < wells.length; i++){
+    const w = wells[i];
+    msg.textContent = `Looking up geology… ${i + 1} of ${wells.length} (${w.id})`;
+    try {
+      const g = await lookupGeologyFor(w);
+      if (g){
+        const base = BASE_WELLS.find(b => b.id === w.id);
+        if (base){
+          const e = Object.assign({}, EDITS[w.id] || {}, {geo: g.geo, _updatedAt: now, _updatedBy: by});
+          if (g.aquifer && !w.group) e.group = g.aquifer;
+          EDITS[w.id] = e;
+        } else {
+          const c = CUSTOM.find(x => x.id === w.id);
+          if (c){ c.geo = g.geo; if (g.aquifer && !c.group) c.group = g.aquifer; c._updatedAt = now; c._updatedBy = by; }
+        }
+        done++;
+      } else failed++;
+    } catch (e) { failed++; }
+    if (i % 10 === 9) await new Promise(r => setTimeout(r, 300));
+  }
+  wellsChanged();
+  msg.textContent = `Geology updated for ${done} well${done === 1 ? "" : "s"} from the state geologic map${failed ? `; ${failed} could not be looked up` : ""}. Values are saved on this device and can be edited per well.`;
+  btn.disabled = false;
+}
+
 /* ---------------- maintenance ---------------- */
 let MAINT = [];
 const MAINT_TASKS = [
@@ -2906,7 +3023,9 @@ const MAINT_TASKS = [
 ];
 const MT = id => MAINT_TASKS.find(t => t.id === id);
 function wellTraits(w){
-  const chem = hasChem(w) ? computeChem(w) : null;
+  const co = chemOf(w);
+  const chem = co ? computeChem(co.c) : null;
+  const si = isNum(w.si) ? w.si : (co && isNum(co.c.si) ? co.c.si : NaN);
   const engine = /cat|diesel|engine/i.test(w.engine || "") && !/motor/i.test(w.engine || "");
   return {
     well: true,
@@ -2916,7 +3035,8 @@ function wellTraits(w){
     hx: w.area === "Upper Eagle Creek" || !!w.hx,
     meter: true,
     "oil-lube": w.area === "Upper Eagle Creek",
-    scaling: isNum(w.si) ? w.si > 0.3 : (chem ? true : false),
+    chemEst: co ? co.est : false,
+    scaling: isNum(si) ? si > 0.3 : false,
     corrosive: chem ? (chem.cls === "Very high") : false
   };
 }
@@ -2989,7 +3109,7 @@ function maintPlanHtml(){
   });
   const hist = MAINT.filter(m => m.well === w.id).sort((a, b) => a.date < b.date ? 1 : -1);
   if (hist.length) h += `<h3>Maintenance history</h3><div class="tbl-wrap"><table><thead><tr><th>Date</th><th>Task</th><th class="num">Engine h</th><th>Parts</th><th class="num">Cost</th><th>Notes</th><th>By</th></tr></thead><tbody>${hist.map(m => `<tr><td>${esc(m.date)}</td><td>${esc((MT(m.task) || {t: m.task}).t)}</td><td class="num">${fmt(m.hours)}</td><td>${esc(m.parts)}</td><td class="num">${isNum(m.cost) ? "$" + fmt(m.cost) : ""}</td><td>${esc(m.notes)}</td><td>${esc(m.by)}</td></tr>`).join("")}</tbody></table></div>`;
-  h += `<p class="src">Intervals are the manual's schedule (Section 8.2) with typical manufacturer intervals for the engine, gear drive, heat exchanger and meter. Always follow the equipment manual for the serial number installed.</p></div>`;
+  h += `<p class="src">${tr.chemEst ? "Scaling and corrosion tasks use water chemistry from the well's location; sample the well to confirm. " : ""}Intervals are the manual's schedule (Section 8.2) with typical manufacturer intervals for the engine, gear drive, heat exchanger and meter. Always follow the equipment manual for the serial number installed.</p></div>`;
   return {title: `Maintenance program: ${w.id}`, html: h};
 }
 function maintCsv(){
@@ -3135,10 +3255,12 @@ function setupSpec(){
     $("sp_q").value = isNum(w.q) ? w.q : Math.round(dp.p.q);
     $("sp_tdh").value = isNum(w.tdh) ? w.tdh : Math.round(d.tdh);
     $("sp_set").value = isNum(w.set) ? w.set : Math.round(d.set);
-    if (hasChem(w)){ $("sp_cl").value = w.cl; $("sp_so4").value = w.so4; $("sp_hco3").value = w.hco3; $("sp_si").value = isNum(w.si) ? w.si : ""; }
+    const co = chemOf(w);
+    if (co){ $("sp_cl").value = co.c.cl; $("sp_so4").value = co.c.so4; $("sp_hco3").value = co.c.hco3; $("sp_si").value = isNum(co.c.si) ? co.c.si : ""; }
     if (isNum(w.hours)) $("sp_hours").value = w.hours;
     if (isNum(w.elev) || isNum(w.mp)) $("sp_elev").value = Math.round(isNum(w.elev) ? w.elev : w.mp);
     runSpec();
+    if (co && co.est) $("sp_msg").textContent = `Water chemistry from location: ${co.src}.`;
   };
   $("sp_well").addEventListener("change", fill);
   $("sp_go").addEventListener("click", runSpec);
